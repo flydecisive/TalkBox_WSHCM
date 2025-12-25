@@ -1,0 +1,117 @@
+div[data-chat-folders="true"] {
+  height: 40px;
+  max-width: 384px;
+  overflow: hidden;
+  background: #e1ebf0;
+  color: white;
+  border: 2px solid #e1ebf0;
+  border-radius: 8px;
+  margin: 0 5px 15px 5px;
+  display: flex;
+  align-items: center;
+  flex-flow: row nowrap;
+}
+
+div[data-chat-folders="true"]::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.folders__data {
+  width: 100%;
+  height: 100%;
+  padding: 5px 10px 5px 10px;
+  box-sizing: border-box;
+  font-weight: bold;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  overflow-x: scroll;
+}
+
+.folders__data::-webkit-scrollbar {
+  height: 4px;
+}
+
+.folders__data::-webkit-scrollbar-thumb {
+  background-color: #232332 !important;
+  border: 1px solid #232332 !important;
+}
+
+.folder {
+  transition: all 0.1s;
+  color: #232332;
+  border-bottom: 2px solid transparent;
+  padding-bottom: 4px;
+  box-sizing: border-box;
+  font-size: 12px;
+  padding: 0px 5px 4px 5px;
+}
+
+.folder:hover {
+  cursor: pointer;
+  border-bottom-color: #232332;
+}
+
+.folder[data-clicked="true"] {
+  border-bottom-color: #232332;
+}
+
+li[data-ext-menu="true"] {
+  position: relative;
+}
+
+.context_menu {
+  background: #fff;
+  box-sizing: border-box;
+  border: 1px solid #e1ebf0;
+  border-radius: 8px;
+  position: absolute;
+  top: 0;
+  right: -2px;
+  transform: translateX(100%);
+  overflow: hidden;
+}
+
+.context_menu__item {
+  padding: 10px 20px;
+  border-bottom: 1px solid #e1ebf0;
+  color: #232332;
+  font-size: 14px;
+  transition: all 0.1s;
+}
+
+.context_menu__item:hover {
+  cursor: pointer;
+  background-color: #e1ebf0;
+}
+
+.context_menu__item:last-child {
+  border-bottom: 0px;
+}
+
+.ext-hidden-chat {
+  /* Полное скрытие без display: none */
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  left: -9999px !important;
+  top: -9999px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  transform: scale(0) !important;
+}

@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Организация чатов",
+  "version": "1.0",
+  "description": "Расширение для организации чатов WSHCM",
+
+  "icons": {
+    "128": "icons/speech.png"
+  },
+  "permissions": ["storage", "scripting", "activeTab"],
+  "host_permissions": ["*://my.websoft.ru/*", "*://clients.websoft.ru/*"],
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Управление папками",
+    "default_icon": {
+      "128": "icons/speech.png"
+    }
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["*://my.websoft.ru/*", "*://clients.websoft.ru/*"],
+      "js": ["components/components.js", "content.js"],
+      "run_at": "document_end"
+    }
+  ],
+
+  "web_accessible_resources": [
+    {
+      "matches": ["*://my.websoft.ru/*", "*://clients.websoft.ru/*"],
+      "resources": ["styles.css"]
+    }
+  ],
+
+  "background": {
+    "service_worker": "background.js"
+  }
+}
