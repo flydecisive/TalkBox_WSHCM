@@ -26,7 +26,8 @@
 <!-- ABOUT THE PROJECT -->
 
 <p id="about-the-project"></p>
-## О проекте
+
+### О проекте
 
 [![Product Name Screen Shot][product-screenshot]](https://example.com)
 
@@ -46,12 +47,16 @@ Use the `BLANK_README.md` to get started.
 
 <!-- GETTING STARTED -->
 
-## Getting Started
+<p id="getting-started"></p>
+
+## Начало
 
 This is an example of how you may give instructions on setting up your project locally.
 To get a local copy up and running follow these simple example steps.
 
-### Installation
+<p id="installation"></p>
+
+### Установка
 
 _Below is an example of how you can instruct your audience on installing and setting up your app. This template doesn't rely on any external dependencies or services._
 
@@ -76,7 +81,9 @@ _Below is an example of how you can instruct your audience on installing and set
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-### Update
+<p id="update"></p>
+
+### Обновление
 
 This is an example of how to list things you need to use the software and how to install them.
 
@@ -86,6 +93,7 @@ This is an example of how to list things you need to use the software and how to
   ```
 
 <!-- USAGE EXAMPLES -->
+<p id='usage'></p>
 
 ## Usage
 
