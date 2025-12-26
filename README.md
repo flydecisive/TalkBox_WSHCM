@@ -29,7 +29,8 @@
 
 ## О проекте
 
-Расширение для управления чатами в workspace.
+Расширение для управления чатами в workspace. Используется JS, HTML, CSS, chrome.storage API.
+Работает только на сайтах my.websoft.ru и clients.websoft.ru.
 
 <p align="right">(<a href="#readme-top">наверх</a>)</p>
 
@@ -50,7 +51,7 @@
   <img src="images/zip.png" width='400px'/>
   </li>
   <li>Распаковать расширение в папку на ПК, где его удобно будет хранить.</li>
-  <li>Перейти в управление расширениями в браузере или по ссылке <span><a href="browser://extensions/" target="_blank">browser://extensions/</a></span> (<a href="chrome://extensions/" target="_blank">chrome://extensions/</a>)</li>
+  <li>Перейти в управление расширениями в браузере или по ссылке browser://extensions/ (chrome://extensions/)</li>
   <li>Включить Режим разработчика.<br />
   <img src="images/on_dev.png" width='100%'/>
   </li>
@@ -70,7 +71,7 @@
   <img src="images/zip.png" width='400px'/>
   </li>
   <li>Распаковать расширение в папку на ПК, где находится установленное расширение с заменой всех файлов.</li>
-  <li>Перейти в управление расширениями в браузере или по ссылке <a href="browser://extensions/" target="_blank">browser://extensions/</a> (<a href="chrome://extensions/" target="_blank">chrome://extensions/</a>)</li>
+  <li>Перейти в управление расширениями в браузере или по ссылке browser://extensions/ (chrome://extensions/)</li>
   <li>Обновить расширение в браузере.<br />
   <img src="images/update_ext.png" width='400px'/>
   </li>
@@ -79,15 +80,63 @@
 <!-- USAGE EXAMPLES -->
 <p id='usage'></p>
 
-## Usage
+## Использование
 
-Use this space to show useful examples of how a project can be used. Additional screenshots, code examples and demos work well in this space. You may also link to more resources.
+### Использование расширения и описание функционала
 
-_For more examples, please refer to the [Documentation](https://example.com)_
+<ol>
+  <li>Расширение можно включать и выключать. Данные по сортировке при этом сохраняются.<br />
+  <img src="images/on_off_ext.png" width='400px'/>
+  </li>
+  <li>Возможность переименовывать папки. Для возможности режактирования просто кликнуть на нужную папку.<br />
+  Изменение применяется нажатием на клавишу Enter или потерю фокуса.<br />
+  <img src="images/rename.png" width='400px'/>
+  </li>
+  <li>Возможно переключаться между папками.<br />
+  <img src="images/on_off_ext.png" width='400px'/>
+  </li>
+  <li>Счетчик непрочитанных чатов.<br />
+  Счетчик отображается всегда в папке "Все" и в папке, куда добавлен чат.<br />
+  Считается не по сообщениям в чате, а по непрочитанным чатам. Если больше 9 чатов, то в счетчике выводится "9+"<br />
+  <img src="images/badges.png" width='400px'/>
+  </li>
+  <li>Добавление чата в папку происходит через контекстное меню.<br />
+  После добавления чата в папку, появляется индикатор возле папки, в которую добавлен чат.<br />
+  1 чат можно добавлять в несколько папок одновременно.<br />
+  <img src="images/add_chat.png" width='400px'/>
+  </li>
+  <li>Удаление чата из папки происходит повторным нажатием на папку, куда добавлен чат, через контекстное меню.<br />
+  Работает в любой папке.<br />
+  Из папки "Все" чаты удалить нельзя.
+  </li>
+  <li>Показ уведомлений при удалении/добавлении чата.<br />
+  <img src="images/notification.png" width='400px'/>
+  </li>
+  <li>Данные сохраняются между перезагрузками ПК/Браузера или очистке кэша, если намеренно не чистить кэш приложения.
+  </li>
+</ol>
+
+### Ограничения
+
+<ol>
+  <li>Расширение работает только на фронте, поэтому данные сохраняются только в браузере, где установлено расширение.<br />
+  Если вы решите сменить браузер и установить расширение, то сортировку придется делаться повторно<br />
+  Аналогично работает с режимом инкогнито в браузере.
+  </li>
+  <li>Работает только на my.websoft.ru и clients.websoft.ru и только в браузере.
+  </li>
+</ol>
+
+### Ближайшие исправления/доработки
+
+<ol>
+  <li>Исправление позиционирования дополнительного меню.
+  </li>
+  <li>Добавление пользовательских папок.
+  </li>
+  <li>Запоминать папку, в которой находился пользователь перед обновлением страницы.
+  </li>
+  <li>Исправить отображение папок при переходе на другие страницы</li>
+</ol>
 
 <p align="right">(<a href="#readme-top">наверх</a>)</p>
-
-<!-- MARKDOWN LINKS & IMAGES -->
-<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-
-[zip-screenshot]: images/zip.png
