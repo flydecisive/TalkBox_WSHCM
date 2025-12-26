@@ -25,7 +25,7 @@
 
 <!-- ABOUT THE PROJECT -->
 
-## About The Project
+## О проекте
 
 [![Product Name Screen Shot][product-screenshot]](https://example.com)
 
