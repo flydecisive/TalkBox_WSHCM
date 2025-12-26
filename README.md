@@ -50,7 +50,7 @@
   <img src="images/zip.png" width='400px'/>
   </li>
   <li>Распаковать расширение в папку на ПК, где его удобно будет хранить.</li>
-  <li>Перейти в управление расширениями в браузере или по ссылке <a href="browser://extensions/" target="_blank">browser://extensions/</a> (<a href="chrome://extensions/" target="_blank">chrome://extensions/</a>)</li>
+  <li>Перейти в управление расширениями в браузере или по ссылке <span><a href="browser://extensions/" target="_blank">browser://extensions/</a></span> (<a href="chrome://extensions/" target="_blank">chrome://extensions/</a>)</li>
   <li>Включить Режим разработчика.<br />
   <img src="images/on_dev.png" width='100%'/>
   </li>
