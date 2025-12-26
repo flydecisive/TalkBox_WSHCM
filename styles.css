@@ -101,7 +101,7 @@ li[data-ext-menu="true"] {
   border: 1px solid #e1ebf0;
   border-radius: 8px;
   position: absolute;
-  top: 0;
+  bottom: 0;
   right: -2px;
   transform: translateX(100%);
   overflow: hidden;
