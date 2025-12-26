@@ -52,10 +52,10 @@
   <li>Распаковать расширение в папку на ПК, где его удобно будет хранить.</li>
   <li>Перейти в управление расширениями в браузере или по ссылке <a href="browser://extensions/" target="_blank">browser://extensions/</a> (<a href="chrome://extensions/" target="_blank">chrome://extensions/</a>)</li>
   <li>Включить Режим разработчика.<br />
-  <img src="images/on_dev.png" width='400px'/>
+  <img src="images/on_dev.png" width='100%'/>
   </li>
   <li>Нажать кнопку "Загрузить распакованное расширение" и выбрать корневую папку с расширением (TalkBox_WSHCM-main).<br />
-  <img src="images/upload.png" width='400px'/>
+  <img src="images/upload.png" width='100%'/>
   </li>
 </ol>
 
