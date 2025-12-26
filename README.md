@@ -45,8 +45,13 @@
 
 ### Установка
 
+<ol>
+  <li>Скачать zip-архив с расширением.
+  <img src="images/zip.png" width='600px'/>
+  </li>
+</ol>
 1. Скачать zip-архив с расширением.
-   [![Product Name Screen Shot][product-screenshot]]
+   [![ZIP Screen Shot][zip-screenshot]]
 2. Clone the repo
    ```sh
    git clone https://github.com/github_username/repo_name.git
@@ -92,4 +97,4 @@ _For more examples, please refer to the [Documentation](https://example.com)_
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
 
-[product-screenshot]: images/zip.png
+[zip-screenshot]: images/zip.png
