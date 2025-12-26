@@ -56,9 +56,15 @@ class Chats {
   // Слушатель изменений папок
   setupFoldersListener() {
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+      if (sender.id !== chrome.runtime.id) {
+        return true;
+      }
+
       if (request.action === "foldersChanged") {
-        this.foldersData = request.folders;
-        this.updateFoldersDisplay();
+        if (this.validateFoldersData(request.folders)) {
+          this.foldersData = request.folders;
+          this.updateFoldersDisplay();
+        }
         sendResponse({ received: true });
       }
       return true;
@@ -144,6 +150,10 @@ class Chats {
 
   setupStateListener() {
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+      if (sender.id !== chrome.runtime.id) {
+        return true;
+      }
+
       if (request.action === "stateChanged") {
         this.state = request.isEnabled;
         this.applyState();
@@ -180,6 +190,9 @@ class Chats {
   injectFolders() {
     // Сначала удаляем старые папки
     this.removeFolders();
+    const maxAttempts = 10;
+    attempts++;
+    let attempts = 0;
 
     const tryInject = () => {
       const container = document.querySelector(".ws-conversations-header");
@@ -192,8 +205,10 @@ class Chats {
         this.addAtributesForFolders();
         this.setupFolderClickHandlers();
         this.updateSelectedFolder();
-      } else {
+      } else if (attempts < maxAttempts) {
         setTimeout(tryInject, 500);
+      } else {
+        console.warn("Не удалось найти контейнер");
       }
     };
 
@@ -216,6 +231,7 @@ class Chats {
     folders.forEach((el) => el.remove());
   }
 
+  // Загрузка css
   async loadCSS() {
     return new Promise((resolve) => {
       if (document.getElementById("chat-extension-styles")) {
@@ -240,6 +256,19 @@ class Chats {
       };
 
       document.head.appendChild(link);
+    });
+  }
+
+  // Валидация папок
+  validateFoldersData(folders) {
+    if (!Array.isArray(folders)) return false;
+
+    return folders.every((folder) => {
+      return (
+        typeof folder?.id === "string" &&
+        typeof folder?.name === "string" &&
+        (Array.isArray(folder?.chats) || folder?.chats === undefined)
+      );
     });
   }
 
@@ -583,7 +612,7 @@ class Chats {
     );
 
     if (chatName) {
-      return chatName.textContent.trim();
+      return chatName.textContent.trim().replace(/[<>]/g, "").substring(0, 100);
     }
 
     return "Без названия";
