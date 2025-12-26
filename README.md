@@ -47,28 +47,17 @@
 
 <ol>
   <li>Скачать zip-архив с расширением.
-  <img src="images/zip.png" width='600px'/>
+  <img src="images/zip.png" width='400px'/>
+  </li>
+  <li>Распаковать расширение в папку на ПК, где его удобно будет хранить.</li>
+  <li>Перейти в управление расширениями в браузере или по ссылке <a href="browser://extensions/" target="_blank">browser://extensions/</a> (<a href="chrome://extensions/" target="_blank">chrome://extensions/</a>)</li>
+  <li>Включить Режим разработчика.
+  <img src="images/on_dev.png" width='400px'/>
+  </li>
+  <li>Нажать кнопку "Загрузить распакованное расширение" и выбрать корневую папку с расширением (TalkBox_WSHCM-main).
+  <img src="images/upload.png" width='400px'/>
   </li>
 </ol>
-1. Скачать zip-архив с расширением.
-   [![ZIP Screen Shot][zip-screenshot]]
-2. Clone the repo
-   ```sh
-   git clone https://github.com/github_username/repo_name.git
-   ```
-3. Install NPM packages
-   ```sh
-   npm install
-   ```
-4. Enter your API in `config.js`
-   ```js
-   const API_KEY = "ENTER YOUR API";
-   ```
-5. Change git remote url to avoid accidental pushes to base project
-   ```sh
-   git remote set-url origin github_username/repo_name
-   git remote -v # confirm the changes
-   ```
 
 <p align="right">(<a href="#readme-top">наверх</a>)</p>
 
@@ -76,12 +65,16 @@
 
 ### Обновление
 
-This is an example of how to list things you need to use the software and how to install them.
-
-- npm
-  ```sh
-  npm install npm@latest -g
-  ```
+<ol>
+  <li>Скачать zip-архив с расширением.
+  <img src="images/zip.png" width='400px'/>
+  </li>
+  <li>Распаковать расширение в папку на ПК, где находится установленное расширение с заменой всех файлов.</li>
+  <li>Перейти в управление расширениями в браузере или по ссылке <a href="browser://extensions/" target="_blank">browser://extensions/</a> (<a href="chrome://extensions/" target="_blank">chrome://extensions/</a>)</li>
+  <li>Обновить расширение в браузере.
+  <img src="images/update_ext.png" width='400px'/>
+  </li>
+</ol>
 
 <!-- USAGE EXAMPLES -->
 <p id='usage'></p>
