@@ -64,6 +64,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
       });
 
+      chrome.storage.local.get(["selectedFolderId"], (result) => {
+        if (result.selectedFolderId) {
+          const folderExists = request.folders.some(
+            (f) => f.id === result.selectedFolderId
+          );
+          if (!folderExists) {
+            chrome.storage.local.set({ selectedFolderId: "all" });
+          }
+        }
+      });
+
       sendResponse({ success: true });
     });
     return true;
