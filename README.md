@@ -46,15 +46,15 @@
 ### Установка
 
 <ol>
-  <li>Скачать zip-архив с расширением.
+  <li>Скачать zip-архив с расширением.<br />
   <img src="images/zip.png" width='400px'/>
   </li>
   <li>Распаковать расширение в папку на ПК, где его удобно будет хранить.</li>
   <li>Перейти в управление расширениями в браузере или по ссылке <a href="browser://extensions/" target="_blank">browser://extensions/</a> (<a href="chrome://extensions/" target="_blank">chrome://extensions/</a>)</li>
-  <li>Включить Режим разработчика.
+  <li>Включить Режим разработчика.<br />
   <img src="images/on_dev.png" width='400px'/>
   </li>
-  <li>Нажать кнопку "Загрузить распакованное расширение" и выбрать корневую папку с расширением (TalkBox_WSHCM-main).
+  <li>Нажать кнопку "Загрузить распакованное расширение" и выбрать корневую папку с расширением (TalkBox_WSHCM-main).<br />
   <img src="images/upload.png" width='400px'/>
   </li>
 </ol>
@@ -66,12 +66,12 @@
 ### Обновление
 
 <ol>
-  <li>Скачать zip-архив с расширением.
+  <li>Скачать zip-архив с расширением.<br />
   <img src="images/zip.png" width='400px'/>
   </li>
   <li>Распаковать расширение в папку на ПК, где находится установленное расширение с заменой всех файлов.</li>
   <li>Перейти в управление расширениями в браузере или по ссылке <a href="browser://extensions/" target="_blank">browser://extensions/</a> (<a href="chrome://extensions/" target="_blank">chrome://extensions/</a>)</li>
-  <li>Обновить расширение в браузере.
+  <li>Обновить расширение в браузере.<br />
   <img src="images/update_ext.png" width='400px'/>
   </li>
 </ol>
