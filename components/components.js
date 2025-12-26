@@ -1,9 +1,22 @@
-window.folderComponent = (text) => {
-  return `
-        <div class='folder'>
-            ${text}
-        </div>
+window.folderComponent = (folderData) => {
+  const unreadCount = folderData.unreadCount || 0;
+  const badgeText = unreadCount > 9 ? "9+" : unreadCount.toString();
+  const badgeVisible = unreadCount > 0 ? "" : 'style="display: none;"';
+
+  if (unreadCount <= 0) {
+    return `
+      <div class='folder' data-id="${folderData.id}">
+        <div class='folder__text'>${folderData.name}</div>
+      </div>
     `;
+  }
+
+  return `
+    <div class='folder' data-id="${folderData.id}">
+      <div class='folder__badge' ${badgeVisible}>${badgeText}</div>
+      <div class='folder__text'>${folderData.name}</div>
+    </div>
+  `;
 };
 
 window.foldersDataComponent = (foldersData) => {
@@ -13,13 +26,9 @@ window.foldersDataComponent = (foldersData) => {
 
   return `
     <div class='folders__data'>
-        ${foldersData
-          .map((el) => {
-            return folderComponent(el.name);
-          })
-          .join("")}
+      ${foldersData.map(window.folderComponent).join("")}
     </div>
-    `;
+  `;
 };
 
 window.contextMenuComponent = () => {
@@ -66,20 +75,35 @@ window.contextMenuComponent = () => {
   `;
 };
 
-window.extContextMenuItem = (folder) => {
+window.extContextMenuItem = (folder, chatInfo, foldersData) => {
+  let isInFolder = false;
+  if (chatInfo && chatInfo.name && foldersData) {
+    const folderData = foldersData.find((f) => f.id === folder.id);
+    if (folderData && folderData.chats) {
+      isInFolder = folderData.chats.some((chat) => chat.name === chatInfo.name);
+    }
+  }
+
   return `
-    <li class='context_menu__item' data-folder-id='${folder.id}'>
+    <li class='context_menu__item' data-folder-id='${folder.id}' data-action='${
+    isInFolder ? "remove" : "add"
+  }'>
+      <div class='context_menu__item_status ${
+        !isInFolder ? "context_menu__item_status--transparent" : ""
+      }'>
+        
+      </div>
       <p>${folder.name}</p>
     </li>
   `;
 };
 
-window.extContextMenuComponent = (foldersData) => {
+window.extContextMenuComponent = (foldersData, chatInfo) => {
   return `
     <ul class="context_menu">
       ${foldersData
         .map((folder) => {
-          return extContextMenuItem(folder);
+          return extContextMenuItem(folder, chatInfo, foldersData);
         })
         .join("")}
      </ul>

@@ -1,5 +1,5 @@
 div[data-chat-folders="true"] {
-  height: 40px;
+  height: 48px;
   max-width: 384px;
   overflow: hidden;
   background: #e1ebf0;
@@ -10,6 +10,7 @@ div[data-chat-folders="true"] {
   display: flex;
   align-items: center;
   flex-flow: row nowrap;
+  position: relative;
 }
 
 div[data-chat-folders="true"]::-webkit-scrollbar {
@@ -30,6 +31,7 @@ div[data-chat-folders="true"]::-webkit-scrollbar {
   justify-content: space-between;
   gap: 10px;
   overflow-x: scroll;
+  position: relative;
 }
 
 .folders__data::-webkit-scrollbar {
@@ -41,14 +43,27 @@ div[data-chat-folders="true"]::-webkit-scrollbar {
   border: 1px solid #232332 !important;
 }
 
+.folders__data_badge {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #9169f5;
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  z-index: 10000;
+}
+
 .folder {
   transition: all 0.1s;
-  color: #232332;
   border-bottom: 2px solid transparent;
   padding-bottom: 4px;
   box-sizing: border-box;
-  font-size: 12px;
+  font-size: 14px;
   padding: 0px 5px 4px 5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .folder:hover {
@@ -58,6 +73,22 @@ div[data-chat-folders="true"]::-webkit-scrollbar {
 
 .folder[data-clicked="true"] {
   border-bottom-color: #232332;
+}
+
+.folder__badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #fff;
+  background: #c8b9f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.folder__text {
+  color: #232332;
 }
 
 li[data-ext-menu="true"] {
@@ -82,6 +113,9 @@ li[data-ext-menu="true"] {
   color: #232332;
   font-size: 14px;
   transition: all 0.1s;
+  display: flex;
+  align-items: center;
+  gap: 15px;
 }
 
 .context_menu__item:hover {
@@ -91,6 +125,17 @@ li[data-ext-menu="true"] {
 
 .context_menu__item:last-child {
   border-bottom: 0px;
+}
+
+.context_menu__item_status {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #9169f5;
+}
+
+.context_menu__item_status--transparent {
+  background: transparent !important;
 }
 
 .ext-hidden-chat {
@@ -114,4 +159,38 @@ li[data-ext-menu="true"] {
   font-size: 0 !important;
   line-height: 0 !important;
   transform: scale(0) !important;
+}
+
+.ext-hotification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: #6ef5d2;
+  color: #ffffff;
+  padding: 12px 24px;
+  border-radius: 4px;
+  z-index: 10000;
+  font-size: 14px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  animation: fadeInOut 3s ease-in-out;
+}
+
+.ext-no-chats-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+  padding: 20px 10px;
+  text-align: center;
+}
+
+.ext-no-chats-content {
+  max-width: 320px;
+  color: #232332;
+}
+
+.ext-no-chats-content h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
 }
