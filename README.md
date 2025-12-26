@@ -93,7 +93,7 @@
   <img src="images/rename.png" width='400px'/>
   </li>
   <li>Возможно переключаться между папками.<br />
-  <img src="images/on_off_ext.png" width='400px'/>
+  <img src="images/folders_switch.png" width='400px'/>
   </li>
   <li>Счетчик непрочитанных чатов.<br />
   Счетчик отображается всегда в папке "Все" и в папке, куда добавлен чат.<br />
