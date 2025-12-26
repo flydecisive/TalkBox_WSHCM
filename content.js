@@ -191,10 +191,10 @@ class Chats {
     // Сначала удаляем старые папки
     this.removeFolders();
     const maxAttempts = 10;
-    attempts++;
     let attempts = 0;
 
     const tryInject = () => {
+      attempts++;
       const container = document.querySelector(".ws-conversations-header");
 
       if (container) {
