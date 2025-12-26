@@ -10,6 +10,10 @@ class Chats {
     this.extMenuClickHandler = null;
     this.chatListObserver = null;
     this.periodUpdateInterval = null;
+    this.spaObserver = null;
+    this.isInitialized = false;
+    this.reinitTimeout = null;
+    this.isReinitializing = false;
     this.init();
   }
 
@@ -18,11 +22,16 @@ class Chats {
 
     this.state = await this.getEnabledState();
     this.foldersData = await this.getFoldersData();
+
+    this.setupSPAObserver();
+
     this.applyState();
     this.setupStateListener();
     this.setupFoldersListener();
 
     setTimeout(() => this.waitForDOMAndUpdateBadges(), 1000);
+
+    this.isInitialized = true;
   }
 
   // Получение данных папок
@@ -167,11 +176,16 @@ class Chats {
     if (this.state) {
       this.injectFolders();
       this.setupRightClickHandler();
+
       setTimeout(() => {
         this.setupChatListObserver();
         this.setupPeriodicUpdate();
         setTimeout(() => this.updateFolderBadges(), 2000);
       }, 1000);
+
+      if (!this.spaObserver) {
+        this.setupSPAObserver();
+      }
     } else {
       this.removeFolders();
       this.removeContextMenuItem();
@@ -179,6 +193,18 @@ class Chats {
       this.removeExtContextMenu();
       this.removeNoChatsMessage();
       this.removeChatListObserver();
+
+      if (this.spaObserver) {
+        this.spaObserver.disconnect();
+        this.spaObserver = null;
+      }
+
+      if (this.reinitTimeout) {
+        clearTimeout(this.reinitTimeout);
+        this.reinitTimeout = null;
+      }
+
+      this.isReinitializing = false;
 
       if (this.periodUpdateInterval) {
         clearInterval(this.periodUpdateInterval);
@@ -188,7 +214,11 @@ class Chats {
   }
 
   injectFolders() {
-    // Сначала удаляем старые папки
+    const existingFolders = document.querySelector("[data-chat-folders]");
+    if (existingFolders) {
+      return;
+    }
+
     this.removeFolders();
     const maxAttempts = 10;
     let attempts = 0;
@@ -198,6 +228,13 @@ class Chats {
       const container = document.querySelector(".ws-conversations-header");
 
       if (container) {
+        const existingInContainer = container.querySelector(
+          "[data-chat-folders]"
+        );
+        if (existingInContainer) {
+          return;
+        }
+
         const folders = document.createElement("div");
         folders.setAttribute("data-chat-folders", "true");
         container.appendChild(folders);
@@ -228,7 +265,11 @@ class Chats {
 
   removeFolders() {
     const folders = document.querySelectorAll("[data-chat-folders]");
-    folders.forEach((el) => el.remove());
+    folders.forEach((el) => {
+      if (el.getAttribute("data-chat-folders") === "true") {
+        el.remove();
+      }
+    });
   }
 
   // Загрузка css
@@ -1004,6 +1045,131 @@ class Chats {
         clearInterval(interval);
       }
     }, 500);
+  }
+
+  // Работа с spa
+  setupSPAObserver() {
+    const targetNode = document.body;
+
+    if (!targetNode) return;
+
+    const config = {
+      childList: true,
+      subtree: true,
+      attributes: false,
+      characterData: false,
+    };
+
+    const callback = (mutationsList) => {
+      if (this.isReinitializing) return;
+
+      let shouldCheck = false;
+
+      for (let mutation of mutationsList) {
+        if (mutation.type === "childList") {
+          const addedNodes = Array.from(mutation.addedNodes);
+          const hasChatElements = addedNodes.some((node) => {
+            if (node.nodeType === 1) {
+              return (
+                node.matches?.("#cnvs_root, .ws-conversations-header") ||
+                node.querySelector?.("#cnvs_root, .ws-conversations-header")
+              );
+            }
+            return false;
+          });
+
+          if (hasChatElements) {
+            shouldCheck = true;
+            break;
+          }
+        }
+      }
+
+      if (shouldCheck) {
+        this.checkAndReinitialize();
+      }
+    };
+
+    this.spaObserver = new MutationObserver(callback);
+    this.spaObserver.observe(targetNode, config);
+  }
+
+  checkAndReinitialize() {
+    const chatContainer = document.querySelector("#cnvs_root");
+    const conversationsHeader = document.querySelector(
+      ".ws-conversations-header"
+    );
+    const existingFolders = document.querySelector("[data-chat-folders]");
+
+    if (
+      chatContainer &&
+      conversationsHeader &&
+      !existingFolders &&
+      this.state
+    ) {
+      this.removeFolders();
+      this.removeNoChatsMessage();
+
+      this.injectFolders();
+
+      setTimeout(() => {
+        this.updateFolderBadges();
+        this.setupChatListObserver();
+      }, 1000);
+    }
+  }
+
+  checkAndReinitialize() {
+    if (this.isReinitializing) return;
+
+    if (this.reinitTimeout) {
+      clearTimeout(this.reinitTimeout);
+    }
+
+    this.reinitTimeout = setTimeout(() => {
+      this.performReinitialization();
+    }, 500);
+  }
+
+  performReinitialization() {
+    const chatContainer = document.querySelector("#cnvs_root");
+    const conversationsHeader = document.querySelector(
+      ".ws-conversations-header"
+    );
+    const existingFolders = document.querySelector("[data-chat-folders]");
+
+    if (
+      chatContainer &&
+      conversationsHeader &&
+      !existingFolders &&
+      this.state
+    ) {
+      this.isReinitializing = true;
+
+      this.removeAllFolders();
+      this.removeNoChatsMessage();
+
+      this.injectFolders();
+
+      setTimeout(() => {
+        this.updateFolderBadges();
+        this.setupChatListObserver();
+        this.isReinitializing = false;
+      }, 1000);
+    }
+  }
+
+  // Полная очистка папок
+  removeAllFolders() {
+    const mainContainer = document.querySelector("[data-chat-folders]");
+    if (mainContainer) mainContainer.remove();
+
+    const allFolders = document.querySelectorAll(".folder");
+    allFolders.forEach((folder) => {
+      if (folder.parentNode && folder.parentNode.nodeName !== "BODY") {
+        folder.remove();
+      }
+    });
   }
 }
 
