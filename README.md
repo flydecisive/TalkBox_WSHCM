@@ -46,7 +46,7 @@
 ### Установка
 
 1. Скачать zip-архив с расширением.
-   [[product-screenshot]]
+   [![Product Name Screen Shot][product-screenshot]]
 2. Clone the repo
    ```sh
    git clone https://github.com/github_username/repo_name.git
