@@ -1067,7 +1067,7 @@ class Chats {
 
     setTimeout(() => {
       ignoreInitialLoad = false;
-      console.log("SPA observer теперь активен");
+      console.log("SPA observer активен");
     }, 5000);
 
     const callback = (mutationsList) => {
@@ -1089,7 +1089,7 @@ class Chats {
           );
 
           if (hasChatElements && this.state) {
-            console.log("SPA навигация обнаружена");
+            console.log("SPA навигация");
             clearTimeout(reinitTimeout);
             reinitTimeout = setTimeout(() => {
               this.reinitializeForSPA();
