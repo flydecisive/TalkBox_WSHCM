@@ -1,3 +1,6 @@
+// ==============================
+// ОСНОВНОЙ КЛАСС И ИНИЦИАЛИЗАЦИЯ
+// ==============================
 class Chats {
   constructor() {
     this.foldersData = [];
@@ -29,6 +32,10 @@ class Chats {
 
     setTimeout(() => this.waitForDOMAndUpdateBadges(), 1000);
   }
+
+  // ==============================
+  // РАБОТА С ДАННЫМИ ПАПОК
+  // ==============================
 
   // Получение данных папок
   async getFoldersData() {
@@ -75,6 +82,108 @@ class Chats {
       return true;
     });
   }
+
+  // Валидация папок
+  validateFoldersData(folders) {
+    if (!Array.isArray(folders)) return false;
+
+    return folders.every((folder) => {
+      return (
+        typeof folder?.id === "string" &&
+        typeof folder?.name === "string" &&
+        (Array.isArray(folder?.chats) || folder?.chats === undefined)
+      );
+    });
+  }
+
+  // Сохранение данных
+  saveFoldersData() {
+    chrome.runtime.sendMessage(
+      {
+        action: "updateFolders",
+        folders: this.foldersData,
+      },
+      (response) => {
+        if (response?.success) {
+          console.log("Данные папок сохранены");
+        }
+      }
+    );
+  }
+
+  // ==============================
+  // УПРАВЛЕНИЕ СОСТОЯНИЕМ РАСШИРЕНИЯ
+  // ==============================
+
+  async getEnabledState() {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage({ action: "getState" }, (response) => {
+        resolve(response?.isEnabled ?? true);
+      });
+    });
+  }
+
+  setupStateListener() {
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+      if (sender.id !== chrome.runtime.id) {
+        return true;
+      }
+
+      if (request.action === "stateChanged") {
+        this.state = request.isEnabled;
+        this.applyState();
+        sendResponse({ received: true });
+      }
+      return true;
+    });
+  }
+
+  applyState() {
+    if (this.state) {
+      this.foldersInjected = false;
+
+      this.injectFolders();
+      this.setupRightClickHandler();
+
+      setTimeout(() => {
+        this.setupChatListObserver();
+        this.setupPeriodicUpdate();
+        this.applySavedFolder();
+        setTimeout(() => this.updateFolderBadges(), 2000);
+      }, 1000);
+    } else {
+      this.cleanup();
+    }
+  }
+
+  // ==============================
+  // ОЧИСТКА И УДАЛЕНИЕ РЕСУРСОВ
+  // ==============================
+
+  cleanup() {
+    this.removeFolders();
+    this.removeContextMenuItem();
+    this.removeRightClickHandler();
+    this.removeExtContextMenu();
+    this.removeNoChatsMessage();
+    this.removeChatListObserver();
+
+    this.foldersInjected = false;
+
+    if (this.spaObserver) {
+      this.spaObserver.disconnect();
+      this.spaObserver = null;
+    }
+
+    if (this.periodUpdateInterval) {
+      clearInterval(this.periodUpdateInterval);
+      this.periodUpdateInterval = null;
+    }
+  }
+
+  // ==============================
+  // ОТОБРАЖЕНИЕ И УПРАВЛЕНИЕ ПАПКАМИ В UI
+  // ==============================
 
   // Обновление отображения папок
   updateFoldersDisplay() {
@@ -147,67 +256,9 @@ class Chats {
     });
   }
 
-  async getEnabledState() {
-    return new Promise((resolve) => {
-      chrome.runtime.sendMessage({ action: "getState" }, (response) => {
-        resolve(response?.isEnabled ?? true);
-      });
-    });
-  }
-
-  setupStateListener() {
-    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-      if (sender.id !== chrome.runtime.id) {
-        return true;
-      }
-
-      if (request.action === "stateChanged") {
-        this.state = request.isEnabled;
-        this.applyState();
-        sendResponse({ received: true });
-      }
-      return true;
-    });
-  }
-
-  applyState() {
-    if (this.state) {
-      this.foldersInjected = false;
-
-      this.injectFolders();
-      this.setupRightClickHandler();
-
-      setTimeout(() => {
-        this.setupChatListObserver();
-        this.setupPeriodicUpdate();
-        this.applySavedFolder();
-        setTimeout(() => this.updateFolderBadges(), 2000);
-      }, 1000);
-    } else {
-      this.cleanup();
-    }
-  }
-
-  cleanup() {
-    this.removeFolders();
-    this.removeContextMenuItem();
-    this.removeRightClickHandler();
-    this.removeExtContextMenu();
-    this.removeNoChatsMessage();
-    this.removeChatListObserver();
-
-    this.foldersInjected = false;
-
-    if (this.spaObserver) {
-      this.spaObserver.disconnect();
-      this.spaObserver = null;
-    }
-
-    if (this.periodUpdateInterval) {
-      clearInterval(this.periodUpdateInterval);
-      this.periodUpdateInterval = null;
-    }
-  }
+  // ==============================
+  // ВСТАВКА И УДАЛЕНИЕ ПАПОК В DOM
+  // ==============================
 
   injectFolders() {
     if (this.foldersInjected) {
@@ -281,6 +332,10 @@ class Chats {
     }
   }
 
+  // ==============================
+  // CSS И СТИЛИ
+  // ==============================
+
   // Загрузка css
   async loadCSS() {
     return new Promise((resolve) => {
@@ -309,18 +364,9 @@ class Chats {
     });
   }
 
-  // Валидация папок
-  validateFoldersData(folders) {
-    if (!Array.isArray(folders)) return false;
-
-    return folders.every((folder) => {
-      return (
-        typeof folder?.id === "string" &&
-        typeof folder?.name === "string" &&
-        (Array.isArray(folder?.chats) || folder?.chats === undefined)
-      );
-    });
-  }
+  // ==============================
+  // КОНТЕКСТНОЕ МЕНЮ - ОСНОВНОЕ
+  // ==============================
 
   // Работа с контекстным меню
   injectContextMenuItem() {
@@ -340,33 +386,6 @@ class Chats {
       this.prepareExtContextMenu();
       this.addMenuItemListener();
     }
-  }
-
-  // Предварительная подготовка меню
-  prepareExtContextMenu() {
-    const existingMenu = document.querySelector(".context_menu");
-    if (existingMenu) {
-      existingMenu.remove();
-    }
-
-    const chatInfo = this.getSelectedChat();
-
-    // Создание скрытого меню
-    const menuHTML = window.extContextMenuComponent(
-      this.foldersData.slice(1),
-      chatInfo
-    );
-    const tempDiv = document.createElement("div");
-    tempDiv.style.display = "none";
-    tempDiv.innerHTML = menuHTML;
-    document.body.appendChild(tempDiv);
-
-    const menu = tempDiv.firstElementChild;
-    menu.style.display = "none";
-
-    this.preparedMenu = menu;
-
-    this.setupExtContextMenuListeners(menu);
   }
 
   addMenuItemListener() {
@@ -414,11 +433,35 @@ class Chats {
     }
   }
 
-  removeRightClickHandler() {
-    if (this.rightClickHandler) {
-      document.removeEventListener("contextmenu", this.rightClickHandler, true);
-      this.rightClickHandler = null;
+  // ==============================
+  // КОНТЕКСТНОЕ МЕНЮ - РАСШИРЕННОЕ
+  // ==============================
+
+  // Предварительная подготовка меню
+  prepareExtContextMenu() {
+    const existingMenu = document.querySelector(".context_menu");
+    if (existingMenu) {
+      existingMenu.remove();
     }
+
+    const chatInfo = this.getSelectedChat();
+
+    // Создание скрытого меню
+    const menuHTML = window.extContextMenuComponent(
+      this.foldersData.slice(1),
+      chatInfo
+    );
+    const tempDiv = document.createElement("div");
+    tempDiv.style.display = "none";
+    tempDiv.innerHTML = menuHTML;
+    document.body.appendChild(tempDiv);
+
+    const menu = tempDiv.firstElementChild;
+    menu.style.display = "none";
+
+    this.preparedMenu = menu;
+
+    this.setupExtContextMenuListeners(menu);
   }
 
   injectExtContextMenu() {
@@ -547,31 +590,6 @@ class Chats {
     this.closeAllMenus();
   }
 
-  // Удаление чата из папки
-  removeChatFromFolder(chatInfo, folderId) {
-    if (!chatInfo || !chatInfo.name) {
-      return false;
-    }
-
-    const folder = this.foldersData.find((f) => f.id === folderId);
-    if (!folder || !folder.chats) return false;
-
-    const initialLength = folder.chats.length;
-    folder.chats = folder.chats.filter((chat) => chat.name !== chatInfo.name);
-
-    const removed = folder.chats.length < initialLength;
-
-    if (removed) {
-      this.saveFoldersData();
-
-      if (this.selectedFolderId === folderId) {
-        this.filterChatsByFolder(folderId);
-      }
-    }
-
-    return removed;
-  }
-
   // Обновление контекстного меню
   updateContextMenuAfterAction() {
     this.prepareExtContextMenu();
@@ -592,6 +610,10 @@ class Chats {
       container.appendChild(this.preparedMenu);
     }
   }
+
+  // ==============================
+  // УПРАВЛЕНИЕ КОНТЕКСТНЫМИ МЕНЮ
+  // ==============================
 
   handleOutsideClick(e) {
     const contextMenu = document.querySelector(".context_menu");
@@ -624,14 +646,9 @@ class Chats {
     );
   }
 
-  // Получение выбранного чата
-  getSelectedChat() {
-    if (this.lastRightClickedChat) {
-      return this.lastRightClickedChat;
-    }
-
-    return null;
-  }
+  // ==============================
+  // РАБОТА С ПРАВОЙ КНОПКОЙ МЫШИ
+  // ==============================
 
   setupRightClickHandler() {
     this.rightClickHandler = (e) => {
@@ -656,6 +673,26 @@ class Chats {
     document.addEventListener("contextmenu", this.rightClickHandler, true);
   }
 
+  removeRightClickHandler() {
+    if (this.rightClickHandler) {
+      document.removeEventListener("contextmenu", this.rightClickHandler, true);
+      this.rightClickHandler = null;
+    }
+  }
+
+  // ==============================
+  // РАБОТА С ЧАТАМИ
+  // ==============================
+
+  // Получение выбранного чата
+  getSelectedChat() {
+    if (this.lastRightClickedChat) {
+      return this.lastRightClickedChat;
+    }
+
+    return null;
+  }
+
   getChatName(chatElem) {
     const chatName = chatElem.querySelector(
       ".ws-conversations-list-item--info--name"
@@ -668,56 +705,9 @@ class Chats {
     return "Без названия";
   }
 
-  // показ уведомления
-  showNotification(message) {
-    const notification = document.createElement("div");
-    notification.textContent = message;
-    notification.classList.add("ext-notification");
-    notification.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: #6ef5d2;
-      color: #232332;
-      padding: 12px 24px;
-      border-radius: 4px;
-      z-index: 10000;
-      font-family: Arial, sans-serif;
-      font-size: 14px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-      animation: fadeInOut 3s ease-in-out;
-    `;
-
-    const style = document.createElement("style");
-    style.textContent = `
-      @keyframes fadeInOut {
-        0% {
-          opacity: 0;
-          transform: translateY(-20px);
-        }
-        10% {
-          opacity: 1;
-          transform: translateY(0);
-        }
-        90% {
-          opacity: 1;
-          transform: translateY(0);
-        }
-        100% {
-          opacity: 0;
-          transform: translateY(-20px);
-        }
-      }
-    `;
-
-    document.head.appendChild(style);
-    document.body.appendChild(notification);
-
-    setTimeout(() => {
-      notification.remove();
-      style.remove();
-    }, 3000);
-  }
+  // ==============================
+  // ДОБАВЛЕНИЕ И УДАЛЕНИЕ ЧАТОВ ИЗ ПАПОК
+  // ==============================
 
   addChatToFolder(chatInfo, folderId) {
     if (!chatInfo || !chatInfo.name) {
@@ -749,20 +739,44 @@ class Chats {
     }
   }
 
-  // Сохранение данных
-  saveFoldersData() {
-    chrome.runtime.sendMessage(
-      {
-        action: "updateFolders",
-        folders: this.foldersData,
-      },
-      (response) => {
-        if (response?.success) {
-          console.log("Данные папок сохранены");
-        }
+  // Удаление чата из папки
+  removeChatFromFolder(chatInfo, folderId) {
+    if (!chatInfo || !chatInfo.name) {
+      return false;
+    }
+
+    const folder = this.foldersData.find((f) => f.id === folderId);
+    if (!folder || !folder.chats) return false;
+
+    const initialLength = folder.chats.length;
+    folder.chats = folder.chats.filter((chat) => chat.name !== chatInfo.name);
+
+    const removed = folder.chats.length < initialLength;
+
+    if (removed) {
+      this.saveFoldersData();
+
+      if (this.selectedFolderId === folderId) {
+        this.filterChatsByFolder(folderId);
       }
-    );
+    }
+
+    return removed;
   }
+
+  // Проверка чата в папке
+  isChatInFolder(chatInfo, folderId) {
+    if (!chatInfo || !chatInfo.name) return false;
+
+    const folder = this.foldersData.find((f) => f.id === folderId);
+    if (!folder || !folder.chats) return false;
+
+    return folder.chats.some((chat) => chat.name === chatInfo.name);
+  }
+
+  // ==============================
+  // ФИЛЬТРАЦИЯ ЧАТОВ
+  // ==============================
 
   // фильтрация чатов
   filterChatsByFolder(folderId) {
@@ -825,15 +839,9 @@ class Chats {
     }
   }
 
-  // Проверка чата в папке
-  isChatInFolder(chatInfo, folderId) {
-    if (!chatInfo || !chatInfo.name) return false;
-
-    const folder = this.foldersData.find((f) => f.id === folderId);
-    if (!folder || !folder.chats) return false;
-
-    return folder.chats.some((chat) => chat.name === chatInfo.name);
-  }
+  // ==============================
+  // СООБЩЕНИЯ ОТСУТСТВИЯ ЧАТОВ
+  // ==============================
 
   // Показ сообщения нет чатов
   showNoChatsMessage(folderName) {
@@ -867,6 +875,10 @@ class Chats {
       this.noChatsMessage = null;
     }
   }
+
+  // ==============================
+  // РАБОТА С БЕЙДЖАМИ (СЧЕТЧИКАМИ)
+  // ==============================
 
   // Работа с бейджами
   getUnreadCountForFolder(folderId) {
@@ -955,6 +967,10 @@ class Chats {
     return totalUnread;
   }
 
+  // ==============================
+  // НАБЛЮДАТЕЛИ И ОБСЕРВЕРЫ
+  // ==============================
+
   // Обсервер изменений в чате
   setupChatListObserver() {
     const chatListObserver = new MutationObserver((mutations) => {
@@ -1014,6 +1030,10 @@ class Chats {
     }
   }
 
+  // ==============================
+  // ПЕРИОДИЧЕСКИЕ ОБНОВЛЕНИЯ
+  // ==============================
+
   // Переодическое обновление счетчиков
   setupPeriodicUpdate() {
     if (this.periodUpdateInterval) {
@@ -1056,6 +1076,10 @@ class Chats {
       }
     }, 500);
   }
+
+  // ==============================
+  // ОБРАБОТКА SPA (SINGLE PAGE APPLICATION)
+  // ==============================
 
   // Работа с spa
   setupSPAObserver() {
@@ -1133,6 +1157,10 @@ class Chats {
     this.applySavedFolder();
   }
 
+  // ==============================
+  // РАБОТА С LOCAL STORAGE
+  // ==============================
+
   // Загрузка сохраненной папки из storage
   async loadSelectedFolder() {
     return new Promise((resolve) => {
@@ -1194,7 +1222,64 @@ class Chats {
       this.filterChatsByFolder("all");
     }
   }
+
+  // ==============================
+  // УВЕДОМЛЕНИЯ
+  // ==============================
+
+  // показ уведомления
+  showNotification(message) {
+    const notification = document.createElement("div");
+    notification.textContent = message;
+    notification.classList.add("ext-notification");
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #6ef5d2;
+      color: #232332;
+      padding: 12px 24px;
+      border-radius: 4px;
+      z-index: 10000;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      animation: fadeInOut 3s ease-in-out;
+    `;
+
+    const style = document.createElement("style");
+    style.textContent = `
+      @keyframes fadeInOut {
+        0% {
+          opacity: 0;
+          transform: translateY(-20px);
+        }
+        10% {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        90% {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        100% {
+          opacity: 0;
+          transform: translateY(-20px);
+        }
+      }
+    `;
+
+    document.head.appendChild(style);
+    document.body.appendChild(notification);
+
+    setTimeout(() => {
+      notification.remove();
+      style.remove();
+    }, 3000);
+  }
 }
 
-// Инициализация
+// ==============================
+// ИНИЦИАЛИЗАЦИЯ
+// ==============================
 window.chatsInstance = new Chats();
