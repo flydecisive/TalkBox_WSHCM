@@ -12,16 +12,37 @@ class Chats {
     this.periodUpdateInterval = null;
     this.spaObserver = null;
     this.foldersInjected = false;
+
+    this.updateBadgesTimeout = null;
+    this.lastUserActivity = Date.now();
+
+    document.addEventListener(
+      "mousemove",
+      () => (this.lastUserActivity = Date.now())
+    );
+    document.addEventListener(
+      "click",
+      () => (this.lastUserActivity = Date.now())
+    );
+    document.addEventListener(
+      "keydown",
+      () => (this.lastUserActivity = Date.now())
+    );
+
     this.init();
   }
 
   async init() {
     await this.loadCSS();
 
-    this.state = await this.getEnabledState();
-    this.foldersData = await this.getFoldersData();
+    const [state, foldersData] = await Promise.all([
+      this.getEnabledState(),
+      this.getFoldersData(),
+      this.loadSelectedFolder(),
+    ]);
 
-    await this.loadSelectedFolder();
+    this.state = state;
+    this.foldersData = foldersData;
 
     this.applyState();
     this.setupStateListener();
@@ -148,9 +169,10 @@ class Chats {
       setTimeout(() => {
         this.setupChatListObserver();
         this.setupPeriodicUpdate();
-        this.applySavedFolder();
-        setTimeout(() => this.updateFolderBadges(), 2000);
-      }, 1000);
+        this.applySavedFolderQuick();
+
+        setTimeout(() => this.updateFolderBadges(), 500);
+      }, 300);
     } else {
       this.cleanup();
     }
@@ -261,21 +283,20 @@ class Chats {
   // ==============================
 
   injectFolders() {
-    if (this.foldersInjected) {
-      return;
-    }
-
     const existingFolders = document.querySelector("[data-chat-folders]");
     if (existingFolders) {
+      this.foldersInjected = true;
       return;
     }
 
     this.removeFolders();
-    const maxAttempts = 10;
+
+    const maxAttempts = 5;
     let attempts = 0;
 
     const tryInject = () => {
       attempts++;
+
       const container = document.querySelector(".ws-conversations-header");
 
       if (container) {
@@ -283,6 +304,7 @@ class Chats {
           "[data-chat-folders]"
         );
         if (existingInContainer) {
+          this.foldersInjected = true;
           return;
         }
 
@@ -290,19 +312,35 @@ class Chats {
         folders.setAttribute("data-chat-folders", "true");
         container.appendChild(folders);
         folders.innerHTML = window.foldersDataComponent(this.foldersData);
-        this.addAtributesForFolders();
-        this.setupFolderClickHandlers();
-        this.updateSelectedFolder();
 
+        folders.style.marginTop = "10px";
+
+        const folderElements = folders.querySelectorAll(".folder");
+        folderElements.forEach((folder, index) => {
+          if (this.foldersData[index]) {
+            folder.setAttribute("data-id", this.foldersData[index].id);
+            folder.addEventListener("click", (e) => {
+              e.stopPropagation();
+              this.selectFolder(folder);
+            });
+          }
+        });
+
+        this.updateSelectedFolder();
         this.foldersInjected = true;
+
+        setTimeout(() => {
+          this.updateFolderBadges();
+          this.applySavedFolderQuick();
+        }, 100);
       } else if (attempts < maxAttempts) {
-        setTimeout(tryInject, 500);
+        setTimeout(tryInject, 200);
       } else {
-        console.warn("Не удалось найти контейнер");
+        this.foldersInjected = false;
       }
     };
 
-    setTimeout(tryInject, 100);
+    setTimeout(tryInject, 50);
   }
 
   injectFoldersData() {
@@ -357,7 +395,7 @@ class Chats {
 
       link.onerror = (error) => {
         console.error("Ошибка загрузки CSS:", error);
-        resolve(); // Продолжаем даже при ошибке
+        resolve();
       };
 
       document.head.appendChild(link);
@@ -466,7 +504,6 @@ class Chats {
 
   injectExtContextMenu() {
     const container = document.body.querySelector('[data-ext-menu="true"]');
-    // const menuHTML = window.extContextMenuComponent(this.foldersData.slice(1));
 
     if (!container || !this.preparedMenu) {
       return;
@@ -634,6 +671,10 @@ class Chats {
     this.removeExtContextMenu();
     this.removeContextMenuItem();
     this.closeSiteContextMenu();
+
+    setTimeout(() => {
+      this.updateFolderBadges();
+    }, 50);
   }
 
   closeSiteContextMenu() {
@@ -671,12 +712,29 @@ class Chats {
     };
 
     document.addEventListener("contextmenu", this.rightClickHandler, true);
+
+    this.chatClickHandler = (e) => {
+      const chatItem = e.target.closest(".ws-conversations-list-item");
+      if (chatItem) {
+        setTimeout(() => {
+          this.updateFolderBadges();
+        }, 100);
+      }
+    };
+
+    document.addEventListener("click", this.chatClickHandler, true);
   }
 
   removeRightClickHandler() {
     if (this.rightClickHandler) {
       document.removeEventListener("contextmenu", this.rightClickHandler, true);
       this.rightClickHandler = null;
+    }
+
+    // ДОБАВЛЕНО: Удаляем обработчик кликов
+    if (this.chatClickHandler) {
+      document.removeEventListener("click", this.chatClickHandler, true);
+      this.chatClickHandler = null;
     }
   }
 
@@ -784,8 +842,16 @@ class Chats {
     const chatsContainer = document.querySelector(
       "#cnvs_root .ws-conversations-list--root"
     );
+
     if (!chatsContainer) {
-      console.log("Контейнер чатов не найден при фильтрации");
+      setTimeout(() => {
+        const retryContainer = document.querySelector(
+          "#cnvs_root .ws-conversations-list--root"
+        );
+        if (retryContainer) {
+          this.filterChatsByFolder(folderId);
+        }
+      }, 50);
       return;
     }
 
@@ -802,7 +868,6 @@ class Chats {
     } else {
       const folder = this.foldersData.find((f) => f.id === folderId);
       if (!folder) {
-        console.log("Папка не найдена:", folderId);
         return;
       }
 
@@ -814,13 +879,15 @@ class Chats {
 
         this.showNoChatsMessage(folder.name);
       } else {
-        const chatNamesInFolder = folder.chats.map((chat) => chat.name);
+        const chatNamesInFolder = new Set(
+          folder.chats.map((chat) => chat.name)
+        );
         let visibleCount = 0;
 
         chatList.forEach((chat) => {
           const chatName = this.getChatName(chat);
 
-          if (chatNamesInFolder.includes(chatName)) {
+          if (chatNamesInFolder.has(chatName)) {
             chat.classList.remove("ext-hidden-chat");
             chat.removeAttribute("data-ext-hidden");
             visibleCount++;
@@ -895,36 +962,84 @@ class Chats {
   getUnreadCountForSpecificFolder(folder) {
     if (!folder || !folder.chats || folder.chats.length === 0) return 0;
 
-    let unreadCount = 0;
-    const allChats = document.querySelectorAll(".ws-conversations-list-item");
+    // Более точный селектор: бейджи, которые видны
+    const allChatsWithBadges = document.querySelectorAll(
+      ".ws-conversations-list-item .ws-conversations-list-item--badge:not([style*='display: none']), " +
+        ".ws-conversations-list-item .ws-conversations-list-item--badge:not([hidden])"
+    );
 
-    folder.chats.forEach((chatData) => {
-      allChats.forEach((chatElement) => {
-        const chatName = this.getChatName(chatElement);
-        if (chatName === chatData.name) {
-          const badge = chatElement.querySelector(
-            ".ws-conversations-list-item--badge"
-          );
-          if (badge) {
-            unreadCount++;
-          }
+    if (allChatsWithBadges.length === 0) return 0;
+
+    const chatsWithBadgesMap = new Map();
+
+    for (let i = 0; i < allChatsWithBadges.length; i++) {
+      const badge = allChatsWithBadges[i];
+      if (
+        badge.offsetParent !== null &&
+        badge.style.display !== "none" &&
+        !badge.hidden
+      ) {
+        const chatElement = badge.closest(".ws-conversations-list-item");
+        if (chatElement) {
+          const chatName = this.getChatName(chatElement);
+          chatsWithBadgesMap.set(chatName, true);
         }
-      });
-    });
+      }
+    }
+
+    let unreadCount = 0;
+    for (let i = 0; i < folder.chats.length; i++) {
+      if (chatsWithBadgesMap.has(folder.chats[i].name)) {
+        unreadCount++;
+      }
+    }
 
     return unreadCount;
   }
 
   // Обновление счетчиков без полного обновления папок
   updateFolderBadges() {
-    const folders = document.querySelectorAll(".folder");
-    folders.forEach((folder) => {
-      const folderId = folder.getAttribute("data-id");
-      if (folderId) {
-        const unreadCount = this.getUnreadCountForFolder(folderId);
-        this.updateBadgeForFolderElement(folder, unreadCount);
+    if (this.updateBadgesTimeout) {
+      clearTimeout(this.updateBadgesTimeout);
+    }
+
+    this.updateBadgesTimeout = setTimeout(() => {
+      const folders = document.querySelectorAll(".folder");
+
+      if (folders.length === 0) {
+        this.updateBadgesTimeout = null;
+        return;
       }
-    });
+
+      const allBadges = document.querySelectorAll(
+        ".ws-conversations-list-item .ws-conversations-list-item--badge"
+      );
+
+      const chatsWithBadges = new Map();
+      for (let i = 0; i < allBadges.length; i++) {
+        const badge = allBadges[i];
+        const chatElement = badge.closest(".ws-conversations-list-item");
+        if (chatElement) {
+          const chatName = this.getChatName(chatElement);
+          chatsWithBadges.set(chatName, true);
+        }
+      }
+
+      for (let i = 0; i < folders.length; i++) {
+        const folder = folders[i];
+        const folderId = folder.getAttribute("data-id");
+
+        if (folderId) {
+          const unreadCount = this.getUnreadCountForFolderOptimized(
+            folderId,
+            chatsWithBadges
+          );
+          this.updateBadgeForFolderElement(folder, unreadCount);
+        }
+      }
+
+      this.updateBadgesTimeout = null;
+    }, 30);
   }
 
   updateBadgeForFolderElement(folderElement, unreadCount) {
@@ -943,7 +1058,6 @@ class Chats {
       badge.textContent = badgeText;
       badge.style.display = "flex";
     } else {
-      // Удаляем бейдж, если нет непрочитанных
       if (badge) {
         badge.remove();
       }
@@ -952,19 +1066,37 @@ class Chats {
 
   // все непрочитанные чаты
   getTotalUnreadCount() {
-    let totalUnread = 0;
-    const allChats = document.querySelectorAll(".ws-conversations-list-item");
+    const badges = document.querySelectorAll(
+      ".ws-conversations-list-item .ws-conversations-list-item--badge"
+    );
+    return badges.length;
+  }
 
-    allChats.forEach((chatElement) => {
-      const badge = chatElement.querySelector(
-        ".ws-conversations-list-item--badge"
+  getUnreadCountForFolderOptimized(folderId, chatsWithBadgesMap) {
+    if (folderId === "all") {
+      return chatsWithBadgesMap.size;
+    } else {
+      const folder = this.foldersData.find((f) => f.id === folderId);
+      if (!folder) return 0;
+      return this.getUnreadCountForSpecificFolderOptimized(
+        folder,
+        chatsWithBadgesMap
       );
-      if (badge) {
-        totalUnread++;
-      }
-    });
+    }
+  }
 
-    return totalUnread;
+  getUnreadCountForSpecificFolderOptimized(folder, chatsWithBadgesMap) {
+    if (!folder || !folder.chats || folder.chats.length === 0) return 0;
+
+    let unreadCount = 0;
+
+    for (let i = 0; i < folder.chats.length; i++) {
+      if (chatsWithBadgesMap.has(folder.chats[i].name)) {
+        unreadCount++;
+      }
+    }
+
+    return unreadCount;
   }
 
   // ==============================
@@ -973,35 +1105,38 @@ class Chats {
 
   // Обсервер изменений в чате
   setupChatListObserver() {
+    let updatePending = false;
+
     const chatListObserver = new MutationObserver((mutations) => {
       let shouldUpdate = false;
 
-      mutations.forEach((mutation) => {
-        if (mutation.type === "childList" || mutation.type === "attributes") {
-          const addedBadges = mutation.addedNodes
-            ? Array.from(mutation.addedNodes).some(
-                (node) =>
-                  node.classList &&
-                  node.classList.contains("ws-conversations-list-item--badge")
-              )
-            : false;
+      for (const mutation of mutations) {
+        if (mutation.type === "childList") {
+          shouldUpdate = true;
+          break;
+        }
 
-          const removedBadges = mutation.removedNodes
-            ? Array.from(mutation.removedNodes).some(
-                (node) =>
-                  node.classList &&
-                  node.classList.contains("ws-conversations-list-item--badge")
-              )
-            : false;
-
-          if (addedBadges || removedBadges) {
+        if (mutation.type === "attributes") {
+          const target = mutation.target;
+          if (
+            target.classList &&
+            (target.classList.contains("ws-conversations-list-item") ||
+              target.classList.contains("ws-conversations-list-item--badge") ||
+              target.closest(".ws-conversations-list-item"))
+          ) {
             shouldUpdate = true;
+            break;
           }
         }
-      });
+      }
 
-      if (shouldUpdate) {
-        this.updateFolderBadges();
+      if (shouldUpdate && !updatePending) {
+        updatePending = true;
+
+        setTimeout(() => {
+          this.updateFolderBadges();
+          updatePending = false;
+        }, 50);
       }
     });
 
@@ -1013,11 +1148,10 @@ class Chats {
         childList: true,
         subtree: true,
         attributes: true,
-        attributeFilter: ["class"],
+        attributeFilter: ["class", "style", "hidden", "data-*"],
       });
 
       this.chatListObserver = chatListObserver;
-
       this.updateFolderBadges();
     }
   }
@@ -1044,7 +1178,11 @@ class Chats {
       if (this.state) {
         this.updateFolderBadges();
       }
-    }, 5000);
+    }, 3000);
+  }
+
+  isUserActive() {
+    return Date.now() - (this.lastUserActivity || 0) < 30000;
   }
 
   // Проверка дом и принудительное обновление бейджей
@@ -1091,33 +1229,36 @@ class Chats {
 
     setTimeout(() => {
       ignoreInitialLoad = false;
-      console.log("SPA observer активен");
-    }, 5000);
+    }, 1000);
 
     const callback = (mutationsList) => {
       if (ignoreInitialLoad) return;
 
       for (let mutation of mutationsList) {
         if (mutation.type === "childList" && mutation.addedNodes.length > 0) {
-          const hasChatElements = Array.from(mutation.addedNodes).some(
-            (node) => {
-              if (node.nodeType === 1) {
-                return (
-                  node.querySelector &&
-                  (node.querySelector("#cnvs_root") ||
-                    node.querySelector(".ws-conversations-header"))
-                );
+          let hasChatElements = false;
+
+          for (let node of mutation.addedNodes) {
+            if (node.nodeType === 1) {
+              if (
+                node.id === "cnvs_root" ||
+                node.classList?.contains("ws-conversation-header") ||
+                (node.querySelector &&
+                  node.matches &&
+                  (node.matches("#cnvs_root, .ws-conversations-header") ||
+                    node.querySelector("#cnvs_root, .ws-conversations-header")))
+              ) {
+                hasChatElements = true;
+                break;
               }
-              return false;
             }
-          );
+          }
 
           if (hasChatElements && this.state) {
-            console.log("SPA навигация");
             clearTimeout(reinitTimeout);
             reinitTimeout = setTimeout(() => {
               this.reinitializeForSPA();
-            }, 800);
+            }, 300);
             break;
           }
         }
@@ -1132,29 +1273,118 @@ class Chats {
   }
 
   reinitializeForSPA() {
-    const chatContainer = document.querySelector("#cnvs_root");
+    this.foldersInjected = false;
+
+    this.removeFolders();
+
+    setTimeout(() => {
+      this.quickInjectFolders();
+    }, 100);
+  }
+
+  quickInjectFolders() {
     const conversationsHeader = document.querySelector(
       ".ws-conversations-header"
     );
     const existingFolders = document.querySelector("[data-chat-folders]");
 
-    if (!chatContainer || !conversationsHeader) {
+    if (existingFolders && this.foldersInjected) {
+      this.updateFoldersDisplay();
+      this.applySavedFolderQuick();
       return;
     }
 
-    if (existingFolders) {
-      this.updateSelectedFolder();
-      this.filterChatsByFolder(this.selectedFolderId);
+    if (!conversationsHeader) {
+      setTimeout(() => this.quickInjectFolders(), 50);
+      return;
+    }
+
+    const folders = document.createElement("div");
+    folders.setAttribute("data-chat-folders", "true");
+    conversationsHeader.appendChild(folders);
+
+    folders.innerHTML = window.foldersDataComponent(this.foldersData);
+
+    const allFolders = folders.querySelectorAll(".folder");
+    allFolders.forEach((folder, index) => {
+      if (this.foldersData[index]) {
+        folder.setAttribute("data-id", this.foldersData[index].id);
+        folder.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.selectFolder(folder);
+        });
+      }
+    });
+
+    this.updateSelectedFolder();
+
+    this.foldersInjected = true;
+
+    setTimeout(() => {
+      this.applySavedFolderQuick();
       this.updateFolderBadges();
+
+      setTimeout(() => {
+        if (!this.chatListObserver) {
+          this.setupChatListObserver();
+        }
+      }, 200);
+    }, 50);
+  }
+
+  applySavedFolderQuick() {
+    if (!this.selectedFolderId || this.selectedFolderId === "all") {
+      this.filterChatsByFolder("all");
       return;
     }
 
+    const folderElement = document.querySelector(
+      `.folder[data-id="${this.selectedFolderId}"]`
+    );
+
+    if (folderElement) {
+      document.querySelectorAll(".folder").forEach((f) => {
+        f.removeAttribute("data-clicked");
+      });
+
+      folderElement.setAttribute("data-clicked", "true");
+
+      this.filterChatsByFolder(this.selectedFolderId);
+    } else {
+      setTimeout(() => {
+        const retryElement = document.querySelector(
+          `.folder[data-id="${this.selectedFolderId}"]`
+        );
+        if (retryElement) {
+          this.applySavedFolderQuick();
+        } else {
+          this.selectedFolderId = "all";
+          this.filterChatsByFolder("all");
+          this.updateSelectedFolder();
+        }
+      }, 100);
+    }
+  }
+
+  // Принудительная переинъекция папок
+  forceReinjectFolders() {
     this.foldersInjected = false;
     this.removeFolders();
+
     this.injectFolders();
-    this.updateFolderBadges();
-    this.setupChatListObserver();
-    this.applySavedFolder();
+
+    setTimeout(() => {
+      this.updateFolderBadges();
+    }, 500);
+
+    this.removeChatListObserver();
+    setTimeout(() => {
+      this.setupChatListObserver();
+    }, 1000);
+
+    setTimeout(() => {
+      this.applySavedFolder();
+    }, 1500);
   }
 
   // ==============================
@@ -1215,7 +1445,7 @@ class Chats {
               this.updateSelectedFolder();
               this.filterChatsByFolder("all");
             }
-          }, 1000);
+          }, 100);
         }
       }, 500);
     } else {
@@ -1276,6 +1506,24 @@ class Chats {
       notification.remove();
       style.remove();
     }, 3000);
+  }
+
+  // ==============================
+  // ДОПОЛНИТЕЛЬНЫЙ МЕТОД ДЛЯ ПРОВЕРКИ И ВОССТАНОВЛЕНИЯ
+  // ==============================
+
+  checkAndRestoreFolders() {
+    const existingFolders = document.querySelector("[data-chat-folders]");
+    const conversationsHeader = document.querySelector(
+      ".ws-conversations-header"
+    );
+
+    if (conversationsHeader && !existingFolders && this.state) {
+      this.foldersInjected = false;
+      this.injectFolders();
+      return true;
+    }
+    return false;
   }
 }
 
