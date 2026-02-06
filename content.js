@@ -18,15 +18,15 @@ class Chats {
 
     document.addEventListener(
       "mousemove",
-      () => (this.lastUserActivity = Date.now())
+      () => (this.lastUserActivity = Date.now()),
     );
     document.addEventListener(
       "click",
-      () => (this.lastUserActivity = Date.now())
+      () => (this.lastUserActivity = Date.now()),
     );
     document.addEventListener(
       "keydown",
-      () => (this.lastUserActivity = Date.now())
+      () => (this.lastUserActivity = Date.now()),
     );
 
     this.init();
@@ -77,7 +77,7 @@ class Chats {
             },
             () => {
               resolve(defaultFolders);
-            }
+            },
           );
         } else {
           resolve(response.folders);
@@ -128,7 +128,7 @@ class Chats {
         if (response?.success) {
           console.log("Данные папок сохранены");
         }
-      }
+      },
     );
   }
 
@@ -175,6 +175,7 @@ class Chats {
       }, 300);
     } else {
       this.cleanup();
+      this.cleanupOrphanedChats();
     }
   }
 
@@ -216,7 +217,7 @@ class Chats {
         this.foldersData.map((folder) => ({
           ...folder,
           unreadCount: this.getUnreadCountForFolder(folder.id),
-        }))
+        })),
       );
       this.addAtributesForFolders();
       this.setupFolderClickHandlers();
@@ -301,7 +302,7 @@ class Chats {
 
       if (container) {
         const existingInContainer = container.querySelector(
-          "[data-chat-folders]"
+          "[data-chat-folders]",
         );
         if (existingInContainer) {
           this.foldersInjected = true;
@@ -487,7 +488,7 @@ class Chats {
     // Создание скрытого меню
     const menuHTML = window.extContextMenuComponent(
       this.foldersData.slice(1),
-      chatInfo
+      chatInfo,
     );
     const tempDiv = document.createElement("div");
     tempDiv.style.display = "none";
@@ -522,12 +523,12 @@ class Chats {
       document.removeEventListener(
         "click",
         this.handleOutsideClick.bind(this),
-        true
+        true,
       );
       document.addEventListener(
         "click",
         this.handleOutsideClick.bind(this),
-        true
+        true,
       );
     }, 10);
   }
@@ -538,12 +539,12 @@ class Chats {
       document.removeEventListener(
         "click",
         this.handleOutsideClick.bind(this),
-        true
+        true,
       );
 
       if (this.extMenuClickHandler && this.preparedMenu) {
         const menuItems = this.preparedMenu.querySelectorAll(
-          ".context_menu__item"
+          ".context_menu__item",
         );
         menuItems.forEach((item) => {
           item.removeEventListener("click", this.extMenuClickHandler);
@@ -683,7 +684,7 @@ class Chats {
         view: window,
         bubbles: true,
         cancelable: true,
-      })
+      }),
     );
   }
 
@@ -753,7 +754,7 @@ class Chats {
 
   getChatName(chatElem) {
     const chatName = chatElem.querySelector(
-      ".ws-conversations-list-item--info--name"
+      ".ws-conversations-list-item--info--name",
     );
 
     if (chatName) {
@@ -783,6 +784,7 @@ class Chats {
       folder.chats.push({
         name: chatInfo.name,
         addedAt: new Date().toISOString(),
+        autoAdded: folderId === "clients", // Флаг, что добавлен автоматически
       });
 
       this.saveFoldersData();
@@ -795,6 +797,37 @@ class Chats {
     } else {
       return false;
     }
+  }
+
+  // Автоматическое добавление клиентских чатов
+  autoAddClientChat(chatInfo) {
+    if (!chatInfo || !chatInfo.name) return false;
+
+    if (this.isClientChat(chatInfo.name)) {
+      const clientsFolder = this.foldersData.find((f) => f.id === "clients");
+
+      if (clientsFolder) {
+        const alreadyAdded = clientsFolder.chats?.some(
+          (chat) => chat.name === chatInfo.name,
+        );
+
+        if (!alreadyAdded) {
+          const added = this.addChatToFolder(chatInfo, "clients");
+
+          if (added) {
+            if (this.selectedFolderId === "clients") {
+              setTimeout(() => {
+                this.filterChatsByFolder("clients");
+              }, 100);
+            }
+
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
   }
 
   // Удаление чата из папки
@@ -840,13 +873,13 @@ class Chats {
   filterChatsByFolder(folderId) {
     // контейнер с чатами
     const chatsContainer = document.querySelector(
-      "#cnvs_root .ws-conversations-list--root"
+      "#cnvs_root .ws-conversations-list--root",
     );
 
     if (!chatsContainer) {
       setTimeout(() => {
         const retryContainer = document.querySelector(
-          "#cnvs_root .ws-conversations-list--root"
+          "#cnvs_root .ws-conversations-list--root",
         );
         if (retryContainer) {
           this.filterChatsByFolder(folderId);
@@ -857,6 +890,20 @@ class Chats {
 
     // все чатики
     const chatList = chatsContainer.querySelectorAll("li");
+    const allChatNames = new Set();
+
+    chatList.forEach((chat) => {
+      const chatName = this.getChatName(chat);
+      allChatNames.add(chatName);
+
+      if (this.isClientChat(chatName)) {
+        const chatInfo = {
+          element: chat,
+          name: chatName,
+        };
+        this.autoAddClientChat(chatInfo);
+      }
+    });
 
     if (folderId === "all") {
       chatList.forEach((chat) => {
@@ -880,9 +927,10 @@ class Chats {
         this.showNoChatsMessage(folder.name);
       } else {
         const chatNamesInFolder = new Set(
-          folder.chats.map((chat) => chat.name)
+          folder.chats.map((chat) => chat.name),
         );
         let visibleCount = 0;
+        let existingChatsInFolder = 0;
 
         chatList.forEach((chat) => {
           const chatName = this.getChatName(chat);
@@ -891,21 +939,46 @@ class Chats {
             chat.classList.remove("ext-hidden-chat");
             chat.removeAttribute("data-ext-hidden");
             visibleCount++;
+            existingChatsInFolder++;
           } else {
             chat.classList.add("ext-hidden-chat");
             chat.setAttribute("data-ext-hidden", "true");
           }
         });
 
+        const totalChatsInFolder = folder.chats.length;
+        if (existingChatsInFolder < totalChatsInFolder) {
+          console.log(
+            `Папка "${folder.name}": ${totalChatsInFolder - existingChatsInFolder} чатов отсутствуют на странице`,
+          );
+
+          if (!this.isUserActive()) {
+            setTimeout(() => {
+              this.cleanupOrphanedChats();
+            }, 2000);
+          }
+        }
+
         if (visibleCount > 0) {
           this.removeNoChatsMessage();
         } else {
-          this.showNoChatsMessage(folder.name);
+          if (folder.chats.length > 0) {
+            this.showNoChatsMessage(
+              `${folder.name} (чаты отсутствуют на странице)`,
+            );
+
+            setTimeout(() => {
+              if (this.state) {
+                this.cleanupOrphanedChats();
+              }
+            }, 3000);
+          } else {
+            this.showNoChatsMessage(folder.name);
+          }
         }
       }
     }
   }
-
   // ==============================
   // СООБЩЕНИЯ ОТСУТСТВИЯ ЧАТОВ
   // ==============================
@@ -923,12 +996,12 @@ class Chats {
     `;
 
     const chatsList = document.querySelector(
-      "#cnvs_root .ws-conversations-list--root"
+      "#cnvs_root .ws-conversations-list--root",
     );
     if (chatsList && chatsList.parentNode) {
       chatsList.parentNode.insertBefore(
         messageContainer,
-        chatsList.nextSibling
+        chatsList.nextSibling,
       );
     }
 
@@ -965,7 +1038,7 @@ class Chats {
     // Более точный селектор: бейджи, которые видны
     const allChatsWithBadges = document.querySelectorAll(
       ".ws-conversations-list-item .ws-conversations-list-item--badge:not([style*='display: none']), " +
-        ".ws-conversations-list-item .ws-conversations-list-item--badge:not([hidden])"
+        ".ws-conversations-list-item .ws-conversations-list-item--badge:not([hidden])",
     );
 
     if (allChatsWithBadges.length === 0) return 0;
@@ -1012,7 +1085,7 @@ class Chats {
       }
 
       const allBadges = document.querySelectorAll(
-        ".ws-conversations-list-item .ws-conversations-list-item--badge"
+        ".ws-conversations-list-item .ws-conversations-list-item--badge",
       );
 
       const chatsWithBadges = new Map();
@@ -1032,7 +1105,7 @@ class Chats {
         if (folderId) {
           const unreadCount = this.getUnreadCountForFolderOptimized(
             folderId,
-            chatsWithBadges
+            chatsWithBadges,
           );
           this.updateBadgeForFolderElement(folder, unreadCount);
         }
@@ -1067,7 +1140,7 @@ class Chats {
   // все непрочитанные чаты
   getTotalUnreadCount() {
     const badges = document.querySelectorAll(
-      ".ws-conversations-list-item .ws-conversations-list-item--badge"
+      ".ws-conversations-list-item .ws-conversations-list-item--badge",
     );
     return badges.length;
   }
@@ -1080,7 +1153,7 @@ class Chats {
       if (!folder) return 0;
       return this.getUnreadCountForSpecificFolderOptimized(
         folder,
-        chatsWithBadgesMap
+        chatsWithBadgesMap,
       );
     }
   }
@@ -1109,9 +1182,36 @@ class Chats {
 
     const chatListObserver = new MutationObserver((mutations) => {
       let shouldUpdate = false;
+      let newChatsDetected = false;
 
       for (const mutation of mutations) {
         if (mutation.type === "childList") {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === 1 && node.matches) {
+              if (
+                node.matches(".ws-conversations-list-item") ||
+                node.querySelector(".ws-conversations-list-item")
+              ) {
+                const chatElements = node.matches(".ws-conversations-list-item")
+                  ? [node]
+                  : node.querySelectorAll(".ws-conversations-list-item");
+
+                chatElements.forEach((chatElement) => {
+                  const chatName = this.getChatName(chatElement);
+
+                  // Автоматически добавляем клиентские чаты
+                  if (this.isClientChat(chatName)) {
+                    this.autoAddClientChat({
+                      element: chatElement,
+                      name: chatName,
+                    });
+                    newChatsDetected = true;
+                  }
+                });
+              }
+            }
+          });
+
           shouldUpdate = true;
           break;
         }
@@ -1130,7 +1230,7 @@ class Chats {
         }
       }
 
-      if (shouldUpdate && !updatePending) {
+      if ((shouldUpdate || newChatsDetected) && !updatePending) {
         updatePending = true;
 
         setTimeout(() => {
@@ -1141,7 +1241,7 @@ class Chats {
     });
 
     const chatList = document.querySelector(
-      "#cnvs_root .ws-conversations-list--root"
+      "#cnvs_root .ws-conversations-list--root",
     );
     if (chatList) {
       chatListObserver.observe(chatList, {
@@ -1153,14 +1253,21 @@ class Chats {
 
       this.chatListObserver = chatListObserver;
       this.updateFolderBadges();
-    }
-  }
 
-  // удаление обзервера
-  removeChatListObserver() {
-    if (this.chatListObserver) {
-      this.chatListObserver.disconnect();
-      this.chatListObserver = null;
+      setTimeout(() => {
+        const existingChats = chatList.querySelectorAll(
+          ".ws-conversations-list-item",
+        );
+        existingChats.forEach((chatElement) => {
+          const chatName = this.getChatName(chatElement);
+          if (this.isClientChat(chatName)) {
+            this.autoAddClientChat({
+              element: chatElement,
+              name: chatName,
+            });
+          }
+        });
+      }, 1000);
     }
   }
 
@@ -1189,7 +1296,7 @@ class Chats {
   waitForDOMAndUpdateBadges() {
     const checkDom = () => {
       const chatList = document.querySelector(
-        "#cnvs_root .ws-conversations-list--root"
+        "#cnvs_root .ws-conversations-list--root",
       );
 
       if (chatList && chatList.children.length > 0) {
@@ -1276,6 +1383,7 @@ class Chats {
     this.foldersInjected = false;
 
     this.removeFolders();
+    this.cleanupOrphanedChats();
 
     setTimeout(() => {
       this.quickInjectFolders();
@@ -1284,7 +1392,7 @@ class Chats {
 
   quickInjectFolders() {
     const conversationsHeader = document.querySelector(
-      ".ws-conversations-header"
+      ".ws-conversations-header",
     );
     const existingFolders = document.querySelector("[data-chat-folders]");
 
@@ -1339,7 +1447,7 @@ class Chats {
     }
 
     const folderElement = document.querySelector(
-      `.folder[data-id="${this.selectedFolderId}"]`
+      `.folder[data-id="${this.selectedFolderId}"]`,
     );
 
     if (folderElement) {
@@ -1353,7 +1461,7 @@ class Chats {
     } else {
       setTimeout(() => {
         const retryElement = document.querySelector(
-          `.folder[data-id="${this.selectedFolderId}"]`
+          `.folder[data-id="${this.selectedFolderId}"]`,
         );
         if (retryElement) {
           this.applySavedFolderQuick();
@@ -1417,7 +1525,7 @@ class Chats {
   saveSelectedFolder() {
     chrome.storage.local.set(
       { selectedFolderId: this.selectedFolderId },
-      () => {}
+      () => {},
     );
   }
 
@@ -1426,7 +1534,7 @@ class Chats {
     if (this.selectedFolderId && this.selectedFolderId !== "all") {
       setTimeout(() => {
         const folderElement = document.querySelector(
-          `.folder[data-id="${this.selectedFolderId}"]`
+          `.folder[data-id="${this.selectedFolderId}"]`,
         );
 
         if (folderElement) {
@@ -1435,7 +1543,7 @@ class Chats {
         } else {
           setTimeout(() => {
             const retryFolderElement = document.querySelector(
-              `.folder[data-id="${this.selectedFolderId}"]`
+              `.folder[data-id="${this.selectedFolderId}"]`,
             );
             if (retryFolderElement) {
               this.updateSelectedFolder();
@@ -1515,7 +1623,7 @@ class Chats {
   checkAndRestoreFolders() {
     const existingFolders = document.querySelector("[data-chat-folders]");
     const conversationsHeader = document.querySelector(
-      ".ws-conversations-header"
+      ".ws-conversations-header",
     );
 
     if (conversationsHeader && !existingFolders && this.state) {
@@ -1524,6 +1632,61 @@ class Chats {
       return true;
     }
     return false;
+  }
+
+  // ==============================
+  // ОЧИСТКА УСТАРЕВШИХ ЧАТОВ
+  // ==============================
+  cleanupOrphanedChats() {
+    if (this.foldersData.length === 0) return;
+
+    const allChatElements = document.querySelectorAll(
+      ".ws-conversations-list-item",
+    );
+    const existingChatNames = new Set();
+
+    allChatElements.forEach((chatElement) => {
+      const chatName = this.getChatName(chatElement);
+      existingChatNames.add(chatName);
+    });
+
+    let hasChanges = false;
+
+    this.foldersData.forEach((folder) => {
+      if (!folder.chats || folder.chats.length === 0) return;
+
+      const initialLength = folder.chats.length;
+      folder.chats = folder.chats.filter((chat) =>
+        existingChatNames.has(chat.name),
+      );
+
+      if (folder.chats.length !== initialLength) {
+        hasChanges = true;
+      }
+    });
+
+    if (hasChanges) {
+      this.saveFoldersData();
+    }
+
+    return hasChanges;
+  }
+
+  // ==============================
+  // ОПРЕДЕЛЕНИЕ ТИПА ЧАТА
+  // ==============================
+
+  isClientChat(chatName) {
+    const clientPattern = /^\d{6}\s+.+/;
+    const sixDigitPattern = /\b\d{6}\b/;
+
+    return clientPattern.test(chatName) || sixDigitPattern.test(chatName);
+  }
+
+  getChatType(chatName) {
+    if (this.isClientChat(chatName)) {
+      return "client";
+    }
   }
 }
 
