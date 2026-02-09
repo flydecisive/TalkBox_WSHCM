@@ -1,10 +1,12 @@
 document.addEventListener("DOMContentLoaded", async function () {
   let currentFoldersData = [];
   const defaultFoldersData = [
-    { id: "all", name: "Все", chats: [] },
-    { id: "private", name: "Личные", chats: [] },
-    { id: "clients", name: "Клиенты", chats: [] },
-    { id: "others", name: "Другое", chats: [] },
+    { id: "all", name: "Все", chats: [], hidden: false },
+    { id: "private", name: "Личные", chats: [], hidden: false },
+    { id: "clients", name: "Клиенты", chats: [], hidden: false },
+    { id: "others", name: "Другое", chats: [], hidden: false },
+    { id: "archive", name: "Архив", chats: [], hidden: false },
+    { id: "favorites", name: "Избранное", chats: [], hidden: false },
   ];
 
   chrome.storage.local.get(["folders_data"], async (result) => {
@@ -65,11 +67,54 @@ document.addEventListener("DOMContentLoaded", async function () {
   }
 
   function renderFolders() {
-    foldersContainer.innerHTML =
-      window.foldersDataComponentPopup(currentFoldersData);
+    const allFolders = currentFoldersData.filter(
+      (folder) => folder.id !== "all",
+    );
+
+    foldersContainer.innerHTML = window.foldersDataComponentPopup(allFolders);
     addAttributesForFolders();
     setupDragAndDrop();
     handleFolderEdit();
+    setupHideToggleHandlers();
+  }
+
+  function setupHideToggleHandlers() {
+    const hideButtons = document.querySelectorAll(
+      '.folder__hide[data-action="toggleHide"]',
+    );
+
+    hideButtons.forEach((button) => {
+      button.addEventListener("click", async (e) => {
+        e.stopPropagation();
+
+        const folderElement = button.closest(".folder");
+        const folderId = folderElement.getAttribute("data-id");
+
+        const folderIndex = currentFoldersData.findIndex(
+          (f) => f.id === folderId,
+        );
+
+        if (folderIndex !== -1) {
+          currentFoldersData[folderIndex].hidden =
+            !currentFoldersData[folderIndex].hidden;
+
+          try {
+            const response = await chrome.runtime.sendMessage({
+              action: "updateFolders",
+              folders: currentFoldersData,
+            });
+
+            if (response.success) {
+              button.textContent = currentFoldersData[folderIndex].hidden
+                ? "👁️‍🗨️"
+                : "👀";
+            }
+          } catch (error) {
+            console.error("Error saving hide state: ", error);
+          }
+        }
+      });
+    });
   }
 
   function addAttributesForFolders() {
@@ -77,8 +122,9 @@ document.addEventListener("DOMContentLoaded", async function () {
     folders.forEach((folder, index) => {
       const folderText = folder.querySelector(".folder__text");
       folderText.setAttribute("contenteditable", "true");
-      folder.setAttribute("data-id", currentFoldersData[index].id);
-      folder.setAttribute("data-index", index);
+      folderText.setAttribute("maxlength", "30");
+      folder.setAttribute("data-id", currentFoldersData[index + 1].id);
+      folder.setAttribute("data-index", index + 1);
     });
   }
 
@@ -90,6 +136,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     const folders = getAllFolders();
     let draggedFolder = null;
     let draggedFolderId = null;
+    let draggedFolderIndex = null;
 
     folders.forEach((folder) => {
       const dragHandle = folder.querySelector(".folder__drag");
@@ -99,6 +146,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       dragHandle.addEventListener("dragstart", (e) => {
         draggedFolder = folder;
         draggedFolderId = folder.getAttribute("data-id");
+        draggedFolderIndex = parseInt(folder.getAttribute("data-index") || "0");
         folder.classList.add("dragging");
 
         e.dataTransfer.setData("text/plain", draggedFolderId);
@@ -124,6 +172,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         getAllFolders().forEach((f) => f.classList.remove("drag-over"));
         draggedFolder = null;
         draggedFolderId = null;
+        draggedFolderIndex = null;
       });
     });
 
@@ -151,11 +200,15 @@ document.addEventListener("DOMContentLoaded", async function () {
         folder.classList.remove("drag-over");
 
         const targetFolderId = folder.getAttribute("data-id");
+        const targetFolderIndex = parseInt(
+          folder.getAttribute("data-index") || "0",
+        );
+
         if (!draggedFolderId || draggedFolderId === targetFolderId) {
           return;
         }
 
-        await swapFolders(draggedFolderId, targetFolderId);
+        await swapFolders(draggedFolderIndex, targetFolderIndex);
       });
     });
 
@@ -171,24 +224,16 @@ document.addEventListener("DOMContentLoaded", async function () {
     });
   }
 
-  async function swapFolders(draggedId, targetId) {
-    const draggedIndex = currentFoldersData.findIndex(
-      (f) => f.id === draggedId,
-    );
-    const targetIndex = currentFoldersData.findIndex((f) => f.id === targetId);
-
-    if (
-      draggedIndex === -1 ||
-      targetIndex === -1 ||
-      draggedIndex === targetIndex
-    ) {
+  async function swapFolders(draggedIndex, targetIndex) {
+    if (draggedIndex === targetIndex) {
       return;
     }
 
-    [currentFoldersData[draggedIndex], currentFoldersData[targetIndex]] = [
-      currentFoldersData[targetIndex],
-      currentFoldersData[draggedIndex],
-    ];
+    const draggedFolder = currentFoldersData[draggedIndex];
+
+    currentFoldersData.splice(draggedIndex, 1);
+
+    currentFoldersData.splice(targetIndex, 0, draggedFolder);
 
     try {
       const response = await chrome.runtime.sendMessage({
@@ -225,12 +270,27 @@ document.addEventListener("DOMContentLoaded", async function () {
         folderText.style.userSelect = "auto";
       });
 
+      folderText.addEventListener("input", (e) => {
+        const text = e.target.textContent;
+        if (text.length > 30) {
+          e.target.textContent = text.substring(0, 30);
+        }
+      });
+
       folderText.addEventListener("blur", async (e) => {
         const folderElement = e.target;
         const folderId = folderElement.parentNode.getAttribute("data-id");
         const newName = folderElement.textContent.trim();
 
         if (!folderId || !newName) {
+          const folderData = currentFoldersData.find((f) => f.id === folderId);
+          if (folderData) {
+            folderElement.textContent = folderData.name;
+          }
+          return;
+        }
+
+        if (newName.length > 30) {
           const folderData = currentFoldersData.find((f) => f.id === folderId);
           if (folderData) {
             folderElement.textContent = folderData.name;
@@ -257,6 +317,16 @@ document.addEventListener("DOMContentLoaded", async function () {
       });
 
       folderText.addEventListener("keydown", (e) => {
+        const text = e.target.textContent;
+        if (
+          text.length >= 30 &&
+          e.key.length === 1 &&
+          !e.ctrlKey &&
+          !e.metaKey
+        ) {
+          e.preventDefault();
+        }
+
         if (e.key === "Enter") {
           e.preventDefault();
           folderText.blur();
@@ -264,6 +334,12 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         if (folder.classList.contains("dragging")) {
           e.preventDefault();
+        }
+      });
+
+      folderText.addEventListener("focus", () => {
+        if (!folderText.getAttribute("title")) {
+          folderText.setAttribute("title", "Максимум 30 символов");
         }
       });
     });

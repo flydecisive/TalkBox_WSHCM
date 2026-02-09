@@ -213,8 +213,12 @@ class Chats {
     if (!this.state) return;
     const foldersDataEl = document.querySelector("[data-chat-folders]");
     if (foldersDataEl) {
+      const visibleFolders = this.foldersData.filter(
+        (folder) => !folder.hidden,
+      );
+
       foldersDataEl.innerHTML = window.foldersDataComponent(
-        this.foldersData.map((folder) => ({
+        visibleFolders.map((folder) => ({
           ...folder,
           unreadCount: this.getUnreadCountForFolder(folder.id),
         })),
@@ -485,11 +489,12 @@ class Chats {
 
     const chatInfo = this.getSelectedChat();
 
-    // Создание скрытого меню
-    const menuHTML = window.extContextMenuComponent(
-      this.foldersData.slice(1),
-      chatInfo,
-    );
+    const visibleFolders = this.foldersData
+      .slice(1)
+      .filter((folder) => !folder.hidden);
+
+    const menuHTML = window.extContextMenuComponent(visibleFolders, chatInfo);
+
     const tempDiv = document.createElement("div");
     tempDiv.style.display = "none";
     tempDiv.innerHTML = menuHTML;
@@ -1026,7 +1031,7 @@ class Chats {
       return this.getTotalUnreadCount();
     } else {
       const folder = this.foldersData.find((f) => f.id === folderId);
-      if (!folder) return 0;
+      if (!folder || folder.hidden) return 0;
       return this.getUnreadCountForSpecificFolder(folder);
     }
   }

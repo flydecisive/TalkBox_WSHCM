@@ -1,4 +1,6 @@
 window.folderComponent = (folderData) => {
+  if (folderData.hidden) return "";
+
   const unreadCount = folderData.unreadCount || 0;
   const badgeText = unreadCount > 9 ? "9+" : unreadCount.toString();
   const badgeVisible = unreadCount > 0 ? "" : 'style="display: none;"';
@@ -20,10 +22,13 @@ window.folderComponent = (folderData) => {
 };
 
 window.folderComponentPopup = (folderData) => {
+  const hiddenIcon = folderData.hidden ? "👁️‍🗨️" : "👀";
+
   return `
       <div class='folder' data-id="${folderData.id}">
         <div class='folder__text'>${folderData.name}</div>
         <div class='folder__drag' draggable='true'>|||</div>
+        <div class='folder__hide' data-action="toggleHide">${hiddenIcon}</div>
       </div>
     `;
 };
@@ -97,6 +102,8 @@ window.contextMenuComponent = () => {
 };
 
 window.extContextMenuItem = (folder, chatInfo, foldersData) => {
+  if (folder.hidden) return "";
+
   let isInFolder = false;
   if (chatInfo && chatInfo.name && foldersData) {
     const folderData = foldersData.find((f) => f.id === folder.id);

@@ -1,18 +1,81 @@
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.sync.set({ isEnabled: true });
-});
-
-chrome.storage.local.get(["folders_data"], (result) => {
-  if (!result.folders_data || result.folders_data.length === 0) {
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === "install") {
     const defaultFolders = [
-      { id: "all", name: "Все", chats: [] },
-      { id: "private", name: "Личные", chats: [] },
-      { id: "clients", name: "Клиенты", chats: [] },
-      { id: "others", name: "Другое", chats: [] },
+      { id: "all", name: "Все", chats: [], hidden: false },
+      { id: "private", name: "Личные", chats: [], hidden: false },
+      { id: "clients", name: "Клиенты", chats: [], hidden: false },
+      { id: "others", name: "Другое", chats: [], hidden: false },
+      { id: "archive", name: "Архив", chats: [], hidden: false },
+      { id: "favorites", name: "Избранное", chats: [], hidden: false },
     ];
 
     chrome.storage.local.set({ folders_data: defaultFolders });
+    chrome.storage.sync.set({ isEnabled: true });
+  } else if (details.reason === "update") {
+    chrome.storage.local.get(["folders_data"], (result) => {
+      const existingFolders = result.folders_data || [];
+      const updatedFolders = ensureSystemFolders(existingFolders);
+
+      if (JSON.stringify(existingFolders) !== JSON.stringify(updatedFolders)) {
+        chrome.storage.local.set({ folders_data: updatedFolders }, () => {
+          console.log("Folders updated after extension update");
+        });
+      }
+    });
   }
+});
+
+function ensureSystemFolders(existingFolders) {
+  const systemFolders = [
+    { id: "all", name: "Все", chats: [], hidden: false },
+    { id: "private", name: "Личные", chats: [], hidden: false },
+    { id: "clients", name: "Клиенты", chats: [], hidden: false },
+    { id: "others", name: "Другое", chats: [], hidden: false },
+    { id: "archive", name: "Архив", chats: [], hidden: false },
+    { id: "favorites", name: "Избранное", chats: [], hidden: false },
+  ];
+
+  if (!existingFolders || existingFolders.length === 0) {
+    return systemFolders;
+  }
+
+  const result = [...existingFolders];
+  let hasChanges = false;
+
+  systemFolders.forEach((systemFolder) => {
+    const folderIndex = result.findIndex((f) => f.id === systemFolder.id);
+
+    if (folderIndex === -1) {
+      result.push({ ...systemFolder });
+      hasChanges = true;
+    } else {
+      const existingFolder = result[folderIndex];
+      if (existingFolder.hidden === undefined) {
+        existingFolder.hidden = false;
+        hasChanges = true;
+      }
+    }
+  });
+
+  const allFolderIndex = result.findIndex((f) => f.id === "all");
+  if (allFolderIndex > 0) {
+    const allFolder = result.splice(allFolderIndex, 1)[0];
+    result.unshift(allFolder);
+    hasChanges = true;
+  }
+
+  return hasChanges ? result : existingFolders;
+}
+
+chrome.runtime.onStartup.addListener(() => {
+  chrome.storage.local.get(["folders_data"], (result) => {
+    const existingFolders = result.folders_data || [];
+    const updatedFolders = ensureSystemFolders(existingFolders);
+
+    if (JSON.stringify(existingFolders) !== JSON.stringify(updatedFolders)) {
+      chrome.storage.local.set({ folders_data: updatedFolders });
+    }
+  });
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -67,7 +130,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       chrome.storage.local.get(["selectedFolderId"], (result) => {
         if (result.selectedFolderId) {
           const folderExists = request.folders.some(
-            (f) => f.id === result.selectedFolderId
+            (f) => f.id === result.selectedFolderId,
           );
           if (!folderExists) {
             chrome.storage.local.set({ selectedFolderId: "all" });

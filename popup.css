@@ -1,5 +1,5 @@
 body {
-  width: 250px;
+  width: 300px;
   padding: 15px;
   font-family: Arial;
   overflow-y: scroll;
@@ -109,6 +109,8 @@ input:checked + .slider:before {
 .folder__text {
   width: 100%;
   height: 100%;
+  display: flex;
+  align-items: center;
 }
 
 .folder__text:focus {
@@ -123,7 +125,6 @@ input:checked + .slider:before {
   width: 100%;
   min-width: 100%;
   max-width: 368px;
-  max-height: 208px;
   border-radius: 8px;
   padding: 8px;
   box-sizing: border-box;
