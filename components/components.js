@@ -1,4 +1,6 @@
 window.folderComponent = (folderData) => {
+  if (folderData.hidden) return "";
+
   const unreadCount = folderData.unreadCount || 0;
   const badgeText = unreadCount > 9 ? "9+" : unreadCount.toString();
   const badgeVisible = unreadCount > 0 ? "" : 'style="display: none;"';
@@ -19,6 +21,18 @@ window.folderComponent = (folderData) => {
   `;
 };
 
+window.folderComponentPopup = (folderData) => {
+  const hiddenIcon = folderData.hidden ? "👁️‍🗨️" : "👀";
+
+  return `
+      <div class='folder' data-id="${folderData.id}">
+        <div class='folder__text'>${folderData.name}</div>
+        <div class='folder__drag' draggable='true'>|||</div>
+        <div class='folder__hide' data-action="toggleHide">${hiddenIcon}</div>
+      </div>
+    `;
+};
+
 window.foldersDataComponent = (foldersData) => {
   if (foldersData.length === 0) {
     return '<div class="folders__data">Папок нет</div>';
@@ -27,6 +41,18 @@ window.foldersDataComponent = (foldersData) => {
   return `
     <div class='folders__data'>
       ${foldersData.map(window.folderComponent).join("")}
+    </div>
+  `;
+};
+
+window.foldersDataComponentPopup = (foldersData) => {
+  if (foldersData.length === 0) {
+    return '<div class="folders__data">Папок нет</div>';
+  }
+
+  return `
+    <div class='folders__data'>
+      ${foldersData.map(window.folderComponentPopup).join("")}
     </div>
   `;
 };
@@ -76,6 +102,8 @@ window.contextMenuComponent = () => {
 };
 
 window.extContextMenuItem = (folder, chatInfo, foldersData) => {
+  if (folder.hidden) return "";
+
   let isInFolder = false;
   if (chatInfo && chatInfo.name && foldersData) {
     const folderData = foldersData.find((f) => f.id === folder.id);
@@ -86,8 +114,8 @@ window.extContextMenuItem = (folder, chatInfo, foldersData) => {
 
   return `
     <li class='context_menu__item' data-folder-id='${folder.id}' data-action='${
-    isInFolder ? "remove" : "add"
-  }'>
+      isInFolder ? "remove" : "add"
+    }'>
       <div class='context_menu__item_status ${
         !isInFolder ? "context_menu__item_status--transparent" : ""
       }'>

@@ -1,20 +1,19 @@
 document.addEventListener("DOMContentLoaded", async function () {
   let currentFoldersData = [];
   const defaultFoldersData = [
-    { id: "all", name: "Все", chats: [] },
-    { id: "private", name: "Личные", chats: [] },
-    { id: "clients", name: "Клиенты", chats: [] },
-    { id: "others", name: "Другое", chats: [] },
+    { id: "all", name: "Все", chats: [], hidden: false },
+    { id: "private", name: "Личные", chats: [], hidden: false },
+    { id: "clients", name: "Клиенты", chats: [], hidden: false },
+    { id: "others", name: "Другое", chats: [], hidden: false },
+    { id: "archive", name: "Архив", chats: [], hidden: false },
+    { id: "favorites", name: "Избранное", chats: [], hidden: false },
   ];
-
-  // chrome.storage.local.set({ folders_data: [] });
 
   chrome.storage.local.get(["folders_data"], async (result) => {
     if (result.folders_data && result.folders_data.length > 0) {
       currentFoldersData = result.folders_data;
     } else {
       currentFoldersData = defaultFoldersData;
-
       await chrome.storage.local.set({ folders_data: defaultFoldersData });
     }
 
@@ -29,7 +28,6 @@ document.addEventListener("DOMContentLoaded", async function () {
   const foldersContainer = document.querySelector(".popup_folders");
 
   async function initInterface() {
-    // Получаем текущее состояние
     const response = await chrome.runtime.sendMessage({ action: "getState" });
     toggle.checked = response.isEnabled;
 
@@ -43,7 +41,6 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     updateStatus(response.isEnabled);
 
-    // Обработчик переключения
     toggle.addEventListener("change", async function () {
       const isEnabled = this.checked;
 
@@ -61,45 +58,248 @@ document.addEventListener("DOMContentLoaded", async function () {
   function updateStatus(isEnabled) {
     status.textContent = isEnabled ? "✅ Включено" : "❌ Выключено";
     status.style.color = isEnabled ? "green" : "red";
+
     if (isEnabled) {
-      foldersContainer.innerHTML =
-        window.foldersDataComponent(currentFoldersData);
-      addAtributesForFolders();
-      handleFolderEdit();
-      // foldersContainer.appendChild(foldersDataElement);
+      renderFolders();
     } else {
       foldersContainer.innerHTML = "";
     }
   }
 
-  function getAllFolders() {
-    const folders = document.querySelectorAll(".folder");
-    return folders;
+  function renderFolders() {
+    const allFolders = currentFoldersData.filter(
+      (folder) => folder.id !== "all",
+    );
+
+    foldersContainer.innerHTML = window.foldersDataComponentPopup(allFolders);
+    addAttributesForFolders();
+    setupDragAndDrop();
+    handleFolderEdit();
+    setupHideToggleHandlers();
   }
 
-  function addAtributesForFolders() {
+  function setupHideToggleHandlers() {
+    const hideButtons = document.querySelectorAll(
+      '.folder__hide[data-action="toggleHide"]',
+    );
+
+    hideButtons.forEach((button) => {
+      button.addEventListener("click", async (e) => {
+        e.stopPropagation();
+
+        const folderElement = button.closest(".folder");
+        const folderId = folderElement.getAttribute("data-id");
+
+        const folderIndex = currentFoldersData.findIndex(
+          (f) => f.id === folderId,
+        );
+
+        if (folderIndex !== -1) {
+          currentFoldersData[folderIndex].hidden =
+            !currentFoldersData[folderIndex].hidden;
+
+          try {
+            const response = await chrome.runtime.sendMessage({
+              action: "updateFolders",
+              folders: currentFoldersData,
+            });
+
+            if (response.success) {
+              button.textContent = currentFoldersData[folderIndex].hidden
+                ? "👁️‍🗨️"
+                : "👀";
+            }
+          } catch (error) {
+            console.error("Error saving hide state: ", error);
+          }
+        }
+      });
+    });
+  }
+
+  function addAttributesForFolders() {
     const folders = getAllFolders();
     folders.forEach((folder, index) => {
-      folder.setAttribute("contenteditable", true);
-      folder.setAttribute("data-id", currentFoldersData[index].id);
+      const folderText = folder.querySelector(".folder__text");
+      folderText.setAttribute("contenteditable", "true");
+      folderText.setAttribute("maxlength", "30");
+      folder.setAttribute("data-id", currentFoldersData[index + 1].id);
+      folder.setAttribute("data-index", index + 1);
     });
+  }
+
+  function getAllFolders() {
+    return document.querySelectorAll(".folder");
+  }
+
+  function setupDragAndDrop() {
+    const folders = getAllFolders();
+    let draggedFolder = null;
+    let draggedFolderId = null;
+    let draggedFolderIndex = null;
+
+    folders.forEach((folder) => {
+      const dragHandle = folder.querySelector(".folder__drag");
+
+      if (!dragHandle) return;
+
+      dragHandle.addEventListener("dragstart", (e) => {
+        draggedFolder = folder;
+        draggedFolderId = folder.getAttribute("data-id");
+        draggedFolderIndex = parseInt(folder.getAttribute("data-index") || "0");
+        folder.classList.add("dragging");
+
+        e.dataTransfer.setData("text/plain", draggedFolderId);
+        e.dataTransfer.effectAllowed = "move";
+
+        const dragImage = document.createElement("div");
+        dragImage.textContent =
+          folder.querySelector(".folder__text").textContent;
+        dragImage.style.position = "absolute";
+        dragImage.style.top = "-1000px";
+        document.body.appendChild(dragImage);
+        e.dataTransfer.setDragImage(dragImage, 10, 10);
+
+        setTimeout(() => {
+          document.body.removeChild(dragImage);
+        }, 0);
+      });
+
+      dragHandle.addEventListener("dragend", () => {
+        if (draggedFolder) {
+          draggedFolder.classList.remove("dragging");
+        }
+        getAllFolders().forEach((f) => f.classList.remove("drag-over"));
+        draggedFolder = null;
+        draggedFolderId = null;
+        draggedFolderIndex = null;
+      });
+    });
+
+    folders.forEach((folder) => {
+      folder.addEventListener("dragover", (e) => {
+        e.preventDefault();
+
+        if (
+          !draggedFolderId ||
+          draggedFolderId === folder.getAttribute("data-id")
+        ) {
+          return;
+        }
+
+        e.dataTransfer.dropEffect = "move";
+        folder.classList.add("drag-over");
+      });
+
+      folder.addEventListener("dragleave", () => {
+        folder.classList.remove("drag-over");
+      });
+
+      folder.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        folder.classList.remove("drag-over");
+
+        const targetFolderId = folder.getAttribute("data-id");
+        const targetFolderIndex = parseInt(
+          folder.getAttribute("data-index") || "0",
+        );
+
+        if (!draggedFolderId || draggedFolderId === targetFolderId) {
+          return;
+        }
+
+        await swapFolders(draggedFolderIndex, targetFolderIndex);
+      });
+    });
+
+    foldersContainer.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+    });
+
+    foldersContainer.addEventListener("dragleave", (e) => {
+      if (!foldersContainer.contains(e.relatedTarget)) {
+        getAllFolders().forEach((f) => f.classList.remove("drag-over"));
+      }
+    });
+  }
+
+  async function swapFolders(draggedIndex, targetIndex) {
+    if (draggedIndex === targetIndex) {
+      return;
+    }
+
+    const draggedFolder = currentFoldersData[draggedIndex];
+
+    currentFoldersData.splice(draggedIndex, 1);
+
+    currentFoldersData.splice(targetIndex, 0, draggedFolder);
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: "updateFolders",
+        folders: currentFoldersData,
+      });
+
+      if (response.success) {
+        renderFolders();
+      }
+    } catch (error) {
+      console.error("Error saving folder order: ", error);
+    }
   }
 
   async function handleFolderEdit() {
     const folders = getAllFolders();
+
     folders.forEach((folder) => {
-      folder.addEventListener("blur", async (e) => {
+      const folderText = folder.querySelector(".folder__text");
+      const dragHandle = folder.querySelector(".folder__drag");
+
+      if (!folderText || !dragHandle) return;
+
+      dragHandle.addEventListener("dragstart", () => {
+        folderText.setAttribute("contenteditable", "false");
+        folderText.style.pointerEvents = "none";
+        folderText.style.userSelect = "none";
+      });
+
+      dragHandle.addEventListener("dragend", () => {
+        folderText.setAttribute("contenteditable", "true");
+        folderText.style.pointerEvents = "auto";
+        folderText.style.userSelect = "auto";
+      });
+
+      folderText.addEventListener("input", (e) => {
+        const text = e.target.textContent;
+        if (text.length > 30) {
+          e.target.textContent = text.substring(0, 30);
+        }
+      });
+
+      folderText.addEventListener("blur", async (e) => {
         const folderElement = e.target;
-        const folderId = folderElement.getAttribute("data-id");
+        const folderId = folderElement.parentNode.getAttribute("data-id");
         const newName = folderElement.textContent.trim();
 
         if (!folderId || !newName) {
+          const folderData = currentFoldersData.find((f) => f.id === folderId);
+          if (folderData) {
+            folderElement.textContent = folderData.name;
+          }
           return;
         }
 
-        // Обновляем имя в массиве
+        if (newName.length > 30) {
+          const folderData = currentFoldersData.find((f) => f.id === folderId);
+          if (folderData) {
+            folderElement.textContent = folderData.name;
+          }
+          return;
+        }
+
         const folderIndex = currentFoldersData.findIndex(
-          (f) => f.id === folderId
+          (f) => f.id === folderId,
         );
 
         if (folderIndex !== -1) {
@@ -116,10 +316,30 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
       });
 
-      folder.addEventListener("keydown", (e) => {
+      folderText.addEventListener("keydown", (e) => {
+        const text = e.target.textContent;
+        if (
+          text.length >= 30 &&
+          e.key.length === 1 &&
+          !e.ctrlKey &&
+          !e.metaKey
+        ) {
+          e.preventDefault();
+        }
+
         if (e.key === "Enter") {
           e.preventDefault();
-          folder.blur();
+          folderText.blur();
+        }
+
+        if (folder.classList.contains("dragging")) {
+          e.preventDefault();
+        }
+      });
+
+      folderText.addEventListener("focus", () => {
+        if (!folderText.getAttribute("title")) {
+          folderText.setAttribute("title", "Максимум 30 символов");
         }
       });
     });
