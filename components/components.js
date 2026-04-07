@@ -23,12 +23,25 @@ window.folderComponent = (folderData) => {
 
 window.folderComponentPopup = (folderData) => {
   const hiddenIcon = folderData.hidden ? "👁️‍🗨️" : "👀";
+  const isSystemFolder = [
+    "all",
+    "private",
+    "clients",
+    "others",
+    "archive",
+    "favorites",
+  ].includes(folderData.id);
 
   return `
       <div class='folder' data-id="${folderData.id}">
         <div class='folder__text'>${folderData.name}</div>
         <div class='folder__drag' draggable='true'>|||</div>
         <div class='folder__hide' data-action="toggleHide">${hiddenIcon}</div>
+        ${
+          isSystemFolder
+            ? ""
+            : "<div class='folder__delete' data-action='deleteFolder'>🗑️</div>"
+        }
       </div>
     `;
 };
@@ -137,3 +150,15 @@ window.extContextMenuComponent = (foldersData, chatInfo) => {
      </ul>
   `;
 };
+
+// window.extContextMenuComponent = (foldersData, chatInfo, allFoldersData) => {
+//   return `
+//     <ul class="context_menu">
+//       ${foldersData
+//         .map((folder) => {
+//           return window.extContextMenuItem(folder, chatInfo, allFoldersData);
+//         })
+//         .join("")}
+//      </ul>
+//   `;
+// };

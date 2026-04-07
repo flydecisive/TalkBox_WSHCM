@@ -158,3 +158,25 @@ input:checked + .slider:before {
   background-color: rgba(0, 123, 255, 0.05);
   transition: all 0.2s ease;
 }
+
+.folders_actions {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.folders_actions__add {
+  width: 100%;
+  border: 1px solid #b49bfa;
+  background: #fff;
+  color: #232332;
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.folders_actions__add:hover {
+  background: #785fd7;
+  color: #fff;
+}

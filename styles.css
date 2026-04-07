@@ -30,7 +30,8 @@ div[data-chat-folders="true"]::-webkit-scrollbar {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 6px;
+  row-gap: 6px;
+  column-gap: 8px;
   flex-wrap: wrap;
   /* overflow-x: scroll; */
   position: relative;
@@ -59,13 +60,10 @@ div[data-chat-folders="true"]::-webkit-scrollbar {
 .folder {
   transition: all 0.1s;
   border: 1px solid #232332;
-  /* border-bottom: 2px solid transparent;
-  padding-bottom: 4px; */
   height: 30px;
   padding: 4px 6px;
   box-sizing: border-box;
   font-size: 14px;
-  /* padding: 0px 5px 4px 5px; */
   display: flex;
   align-items: center;
   gap: 8px;

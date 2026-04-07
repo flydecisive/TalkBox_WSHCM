@@ -1,4 +1,42 @@
 document.addEventListener("DOMContentLoaded", async function () {
+  const SYSTEM_FOLDER_IDS = new Set([
+    "all",
+    "private",
+    "clients",
+    "others",
+    "archive",
+    "favorites",
+  ]);
+
+  function isSystemFolder(folderId) {
+    return SYSTEM_FOLDER_IDS.has(folderId);
+  }
+
+  function generateFolderId(name) {
+    const normalized = String(name || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-zа-я0-9]+/gi, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 30);
+
+    const base = normalized || "folder";
+    return `user-${base}-${Date.now()}`;
+  }
+
+  function getVisiblePopupFolders() {
+    return currentFoldersData.filter((folder) => folder.id !== "all");
+  }
+
+  async function persistFolders() {
+    const response = await chrome.runtime.sendMessage({
+      action: "updateFolders",
+      folders: currentFoldersData,
+    });
+
+    return response;
+  }
+
   let currentFoldersData = [];
   const defaultFoldersData = [
     { id: "all", name: "Все", chats: [], hidden: false },
@@ -26,6 +64,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   status.classList.add("status");
   switchContainer.insertAdjacentElement("afterend", status);
   const foldersContainer = document.querySelector(".popup_folders");
+  const addFolderButton = document.getElementById("addFolderButton");
 
   async function initInterface() {
     const response = await chrome.runtime.sendMessage({ action: "getState" });
@@ -40,6 +79,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
 
     updateStatus(response.isEnabled);
+
+    setupAddFolderHandler();
 
     toggle.addEventListener("change", async function () {
       const isEnabled = this.checked;
@@ -67,15 +108,14 @@ document.addEventListener("DOMContentLoaded", async function () {
   }
 
   function renderFolders() {
-    const allFolders = currentFoldersData.filter(
-      (folder) => folder.id !== "all",
-    );
+    const allFolders = getVisiblePopupFolders();
 
     foldersContainer.innerHTML = window.foldersDataComponentPopup(allFolders);
     addAttributesForFolders();
     setupDragAndDrop();
     handleFolderEdit();
     setupHideToggleHandlers();
+    setupDeleteFolderHandlers();
   }
 
   function setupHideToggleHandlers() {
@@ -112,6 +152,51 @@ document.addEventListener("DOMContentLoaded", async function () {
           } catch (error) {
             console.error("Error saving hide state: ", error);
           }
+        }
+      });
+    });
+  }
+
+  function setupDeleteFolderHandlers() {
+    const deleteButtons = document.querySelectorAll(
+      '.folder__delete[data-action="deleteFolder"]',
+    );
+
+    deleteButtons.forEach((button) => {
+      button.addEventListener("click", async (e) => {
+        e.stopPropagation();
+
+        const folderElement = button.closest(".folder");
+        const folderId = folderElement?.getAttribute("data-id");
+
+        if (!folderId || isSystemFolder(folderId)) {
+          return;
+        }
+
+        const folder = currentFoldersData.find((f) => f.id === folderId);
+        if (!folder) {
+          return;
+        }
+
+        const confirmed = confirm(
+          `Удалить папку "${folder.name}"? Чаты из системы не удалятся, только связь с папкой.`,
+        );
+
+        if (!confirmed) {
+          return;
+        }
+
+        currentFoldersData = currentFoldersData.filter(
+          (f) => f.id !== folderId,
+        );
+
+        try {
+          const response = await persistFolders();
+          if (response?.success) {
+            renderFolders();
+          }
+        } catch (error) {
+          console.error("Error deleting folder:", error);
         }
       });
     });
@@ -343,5 +428,65 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
       });
     });
+  }
+
+  function setupAddFolderHandler() {
+    if (!addFolderButton) return;
+
+    addFolderButton.addEventListener("click", async () => {
+      const defaultName = getNextFolderName();
+      const folderName = prompt("Название новой папки:", defaultName);
+
+      if (!folderName) return;
+
+      const trimmedName = folderName.trim();
+      if (!trimmedName) return;
+
+      const duplicate = currentFoldersData.some(
+        (folder) =>
+          folder.name.trim().toLowerCase() === trimmedName.toLowerCase(),
+      );
+
+      if (duplicate) {
+        alert("Папка с таким названием уже существует");
+        return;
+      }
+
+      const newFolder = {
+        id: generateFolderId(trimmedName),
+        name: trimmedName,
+        chats: [],
+        hidden: false,
+      };
+
+      currentFoldersData.push(newFolder);
+
+      try {
+        const response = await persistFolders();
+        if (response?.success) {
+          renderFolders();
+        }
+      } catch (error) {
+        console.error("Error creating folder:", error);
+      }
+    });
+  }
+
+  function getNextFolderName() {
+    let index = 1;
+
+    while (true) {
+      const candidate = `Новая папка ${index}`;
+      const exists = currentFoldersData.some(
+        (folder) =>
+          folder.name.trim().toLowerCase() === candidate.toLowerCase(),
+      );
+
+      if (!exists) {
+        return candidate;
+      }
+
+      index += 1;
+    }
   }
 });
