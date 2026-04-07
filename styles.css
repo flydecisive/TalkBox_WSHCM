@@ -1,5 +1,5 @@
 div[data-chat-folders="true"] {
-  height: 48px;
+  /* height: 48px; */
   max-width: 384px;
   overflow: hidden;
   background: #e1ebf0;
@@ -21,16 +21,18 @@ div[data-chat-folders="true"]::-webkit-scrollbar {
 
 .folders__data {
   width: 100%;
+  max-width: 100%;
   height: 100%;
-  padding: 5px 10px 5px 10px;
+  padding: 10px;
   box-sizing: border-box;
   font-weight: bold;
   text-align: center;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  overflow-x: scroll;
+  justify-content: flex-start;
+  gap: 6px;
+  flex-wrap: wrap;
+  /* overflow-x: scroll; */
   position: relative;
 }
 
@@ -56,34 +58,40 @@ div[data-chat-folders="true"]::-webkit-scrollbar {
 
 .folder {
   transition: all 0.1s;
-  border-bottom: 2px solid transparent;
-  padding-bottom: 4px;
+  border: 1px solid #232332;
+  /* border-bottom: 2px solid transparent;
+  padding-bottom: 4px; */
+  height: 30px;
+  padding: 4px 6px;
   box-sizing: border-box;
   font-size: 14px;
-  padding: 0px 5px 4px 5px;
+  /* padding: 0px 5px 4px 5px; */
   display: flex;
   align-items: center;
   gap: 8px;
+  background: #fff;
+  border-radius: 8px;
 }
 
 .folder:hover {
   cursor: pointer;
-  border-bottom-color: #232332;
+  background: #e1ebf0;
 }
 
 .folder[data-clicked="true"] {
-  border-bottom-color: #232332;
+  background: #dccdfa;
 }
 
 .folder__badge {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   color: #fff;
-  background: #c8b9f0;
+  background: #232332;
   display: flex;
   align-items: center;
   justify-content: center;
+  text-align: center;
   font-size: 12px;
 }
 

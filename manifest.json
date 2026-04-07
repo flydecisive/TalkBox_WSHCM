@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Организация чатов",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Расширение для организации чатов WSHCM",
 
   "icons": {
@@ -21,7 +21,7 @@
   "content_scripts": [
     {
       "matches": ["*://my.websoft.ru/*", "*://clients.websoft.ru/*"],
-      "js": ["components/components.js", "content.js"],
+      "js": ["components/components.js", "dist/content.js"],
       "run_at": "document_end"
     }
   ],
