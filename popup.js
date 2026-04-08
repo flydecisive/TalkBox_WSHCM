@@ -65,6 +65,115 @@ document.addEventListener("DOMContentLoaded", async function () {
   switchContainer.insertAdjacentElement("afterend", status);
   const foldersContainer = document.querySelector(".popup_folders");
   const addFolderButton = document.getElementById("addFolderButton");
+  const popupToast = document.getElementById("popupToast");
+  const popupModal = document.getElementById("popupModal");
+  const popupModalTitle = document.getElementById("popupModalTitle");
+  const popupModalText = document.getElementById("popupModalText");
+  const popupModalInput = document.getElementById("popupModalInput");
+  const popupModalCancel = document.getElementById("popupModalCancel");
+  const popupModalConfirm = document.getElementById("popupModalConfirm");
+
+  let popupToastTimer = null;
+
+  function showToast(message) {
+    if (!popupToast) return;
+
+    popupToast.textContent = message;
+    popupToast.classList.add("show");
+
+    if (popupToastTimer) {
+      clearTimeout(popupToastTimer);
+    }
+
+    popupToastTimer = setTimeout(() => {
+      popupToast.classList.remove("show");
+    }, 1800);
+  }
+
+  function openTextModal({
+    title,
+    text = "",
+    value = "",
+    confirmText = "Сохранить",
+  }) {
+    return new Promise((resolve) => {
+      popupModalTitle.textContent = title;
+      popupModalText.textContent = text;
+      popupModalInput.hidden = false;
+      popupModalInput.value = value;
+      popupModalConfirm.textContent = confirmText;
+      popupModal.hidden = false;
+
+      const cleanup = () => {
+        popupModal.hidden = true;
+        popupModalCancel.removeEventListener("click", onCancel);
+        popupModalConfirm.removeEventListener("click", onConfirm);
+        popupModalInput.removeEventListener("keydown", onKeydown);
+      };
+
+      const onCancel = () => {
+        cleanup();
+        resolve(null);
+      };
+
+      const onConfirm = () => {
+        const val = popupModalInput.value.trim();
+        cleanup();
+        resolve(val || null);
+      };
+
+      const onKeydown = (e) => {
+        if (e.key === "Enter") onConfirm();
+        if (e.key === "Escape") onCancel();
+      };
+
+      popupModalCancel.addEventListener("click", onCancel);
+      popupModalConfirm.addEventListener("click", onConfirm);
+      popupModalInput.addEventListener("keydown", onKeydown);
+
+      setTimeout(() => {
+        popupModalInput.focus();
+        popupModalInput.select();
+      }, 0);
+    });
+  }
+
+  function openConfirmModal({ title, text, confirmText = "Удалить" }) {
+    return new Promise((resolve) => {
+      popupModalTitle.textContent = title;
+      popupModalText.textContent = text;
+      popupModalInput.hidden = true;
+      popupModalInput.value = "";
+      popupModalConfirm.textContent = confirmText;
+      popupModal.hidden = false;
+
+      const cleanup = () => {
+        popupModal.hidden = true;
+        popupModalCancel.removeEventListener("click", onCancel);
+        popupModalConfirm.removeEventListener("click", onConfirm);
+        document.removeEventListener("keydown", onKeydown);
+      };
+
+      const onCancel = () => {
+        cleanup();
+        resolve(false);
+      };
+
+      const onConfirm = () => {
+        cleanup();
+        resolve(true);
+      };
+
+      const onKeydown = (e) => {
+        if (e.key === "Escape") onCancel();
+        if (e.key === "Enter") onConfirm();
+      };
+
+      popupModalCancel.addEventListener("click", onCancel);
+      popupModalConfirm.addEventListener("click", onConfirm);
+      document.addEventListener("keydown", onKeydown);
+    });
+  }
 
   async function initInterface() {
     const response = await chrome.runtime.sendMessage({ action: "getState" });
@@ -178,9 +287,15 @@ document.addEventListener("DOMContentLoaded", async function () {
           return;
         }
 
-        const confirmed = confirm(
-          `Удалить папку "${folder.name}"? Чаты из системы не удалятся, только связь с папкой.`,
-        );
+        const confirmed = await openConfirmModal({
+          title: "Удаление папки",
+          text: `Удалить папку "${folder.name}"? Чаты из системы не удалятся, только связь с папкой.`,
+          confirmText: "Удалить",
+        });
+
+        if (!confirmed) {
+          return;
+        }
 
         if (!confirmed) {
           return;
@@ -194,6 +309,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           const response = await persistFolders();
           if (response?.success) {
             renderFolders();
+            showToast(`Папка "${folder.name}" удалена`);
           }
         } catch (error) {
           console.error("Error deleting folder:", error);
@@ -435,7 +551,13 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     addFolderButton.addEventListener("click", async () => {
       const defaultName = getNextFolderName();
-      const folderName = prompt("Название новой папки:", defaultName);
+
+      const folderName = await openTextModal({
+        title: "Новая папка",
+        text: "Введите название папки",
+        value: defaultName,
+        confirmText: "Создать",
+      });
 
       if (!folderName) return;
 
@@ -448,7 +570,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       );
 
       if (duplicate) {
-        alert("Папка с таким названием уже существует");
+        showToast("Папка с таким названием уже существует");
         return;
       }
 
@@ -465,9 +587,11 @@ document.addEventListener("DOMContentLoaded", async function () {
         const response = await persistFolders();
         if (response?.success) {
           renderFolders();
+          showToast(`Папка "${trimmedName}" создана`);
         }
       } catch (error) {
         console.error("Error creating folder:", error);
+        showToast("Не удалось создать папку");
       }
     });
   }

@@ -50,6 +50,18 @@ export function setupSPAWatchdog(state, app) {
       if (typeof app.cleanupOrphanedChatsSoft === "function") {
         app.cleanupOrphanedChatsSoft();
       }
+
+      if (typeof app.updatePinsBar === "function") {
+        app.updatePinsBar();
+      }
+
+      if (typeof app.markVisiblePinnedChatsAsSeen === "function") {
+        app.markVisiblePinnedChatsAsSeen();
+      }
+
+      if (typeof app.cleanupOldPinnedChats === "function") {
+        app.cleanupOldPinnedChats();
+      }
     }
   }, 3000);
 }
@@ -75,6 +87,10 @@ export function setupSPAObserver(state, app) {
     if (!foldersExist) {
       if (typeof app.reinitializeUI === "function") {
         app.reinitializeUI();
+      }
+
+      if (typeof app.updatePinsBar === "function") {
+        app.updatePinsBar();
       }
     }
   });

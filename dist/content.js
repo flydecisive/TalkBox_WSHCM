@@ -27,7 +27,12 @@
       updateBadgesTimeout: null,
       lastUserActivity: Date.now(),
       noChatsMessage: null,
-      orphanMissCounts: /* @__PURE__ */ new Map()
+      orphanMissCounts: /* @__PURE__ */ new Map(),
+      pinContextHandler: null,
+      lastRightClickedMessage: null,
+      pinChatObserverInterval: null,
+      lastObservedChatKey: null,
+      pinsModalOpen: false
     };
   }
   var init_state = __esm({
@@ -1217,6 +1222,15 @@
         if (typeof app.cleanupOrphanedChatsSoft === "function") {
           app.cleanupOrphanedChatsSoft();
         }
+        if (typeof app.updatePinsBar === "function") {
+          app.updatePinsBar();
+        }
+        if (typeof app.markVisiblePinnedChatsAsSeen === "function") {
+          app.markVisiblePinnedChatsAsSeen();
+        }
+        if (typeof app.cleanupOldPinnedChats === "function") {
+          app.cleanupOldPinnedChats();
+        }
       }
     }, 3e3);
   }
@@ -1236,6 +1250,9 @@
       if (!foldersExist) {
         if (typeof app.reinitializeUI === "function") {
           app.reinitializeUI();
+        }
+        if (typeof app.updatePinsBar === "function") {
+          app.updatePinsBar();
         }
       }
     });
@@ -1354,6 +1371,730 @@
     }
   });
 
+  // content/pins/pin-storage.js
+  function getRetentionMs() {
+    return PIN_RETENTION_DAYS * 24 * 60 * 60 * 1e3;
+  }
+  async function getAllPinnedMessages() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get([STORAGE_KEY], (result) => {
+        resolve(result?.[STORAGE_KEY] || {});
+      });
+    });
+  }
+  async function getPinnedMessagesByChat(chatKey) {
+    const allPins = await getAllPinnedMessages();
+    return allPins[chatKey] || [];
+  }
+  async function savePinnedMessagesByChat(chatKey, pins) {
+    const allPins = await getAllPinnedMessages();
+    if (!pins || pins.length === 0) {
+      delete allPins[chatKey];
+    } else {
+      allPins[chatKey] = pins;
+    }
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ [STORAGE_KEY]: allPins }, () => {
+        resolve(true);
+      });
+    });
+  }
+  async function addPinnedMessage(chatKey, pin) {
+    const pins = await getPinnedMessagesByChat(chatKey);
+    const exists = pins.some((item) => item.messageId === pin.messageId);
+    if (exists) return false;
+    pins.push(pin);
+    await savePinnedMessagesByChat(chatKey, pins);
+    return true;
+  }
+  async function removePinnedMessage(chatKey, messageId) {
+    const pins = await getPinnedMessagesByChat(chatKey);
+    const nextPins = pins.filter((item) => item.messageId !== messageId);
+    await savePinnedMessagesByChat(chatKey, nextPins);
+    return true;
+  }
+  async function isPinnedMessage(chatKey, messageId) {
+    const pins = await getPinnedMessagesByChat(chatKey);
+    return pins.some((item) => item.messageId === messageId);
+  }
+  async function getAllChatsLastSeen() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get([CHAT_LAST_SEEN_KEY], (result) => {
+        resolve(result?.[CHAT_LAST_SEEN_KEY] || {});
+      });
+    });
+  }
+  async function saveAllChatsLastSeen(lastSeenMap) {
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ [CHAT_LAST_SEEN_KEY]: lastSeenMap }, () => {
+        resolve(true);
+      });
+    });
+  }
+  async function markChatsAsSeen(chatDescriptors) {
+    if (!Array.isArray(chatDescriptors) || chatDescriptors.length === 0) {
+      return false;
+    }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const lastSeenMap = await getAllChatsLastSeen();
+    chatDescriptors.forEach((chat) => {
+      if (!chat?.chatKey) return;
+      lastSeenMap[chat.chatKey] = {
+        chatKey: chat.chatKey,
+        chatNumber: chat.chatNumber || null,
+        chatTitle: chat.chatTitle || null,
+        fullTitle: chat.fullTitle || null,
+        lastSeenAt: now
+      };
+    });
+    await saveAllChatsLastSeen(lastSeenMap);
+    return true;
+  }
+  async function cleanupOldPinnedChats() {
+    const allPins = await getAllPinnedMessages();
+    const lastSeenMap = await getAllChatsLastSeen();
+    const now = Date.now();
+    const retentionMs = getRetentionMs();
+    let removedChats = 0;
+    let changed = false;
+    Object.keys(allPins).forEach((chatKey) => {
+      const pins = allPins[chatKey];
+      if (!Array.isArray(pins) || pins.length === 0) {
+        delete allPins[chatKey];
+        changed = true;
+        return;
+      }
+      const isLocked = pins.some((pin) => pin.isLocked === true);
+      if (isLocked) {
+        return;
+      }
+      const lastSeen = lastSeenMap[chatKey]?.lastSeenAt;
+      if (!lastSeen) {
+        return;
+      }
+      const lastSeenTs = new Date(lastSeen).getTime();
+      if (Number.isNaN(lastSeenTs)) {
+        return;
+      }
+      if (now - lastSeenTs > retentionMs) {
+        delete allPins[chatKey];
+        delete lastSeenMap[chatKey];
+        removedChats += 1;
+        changed = true;
+      }
+    });
+    if (!changed) {
+      return { removedChats: 0 };
+    }
+    await new Promise((resolve) => {
+      chrome.storage.local.set(
+        {
+          [STORAGE_KEY]: allPins,
+          [CHAT_LAST_SEEN_KEY]: lastSeenMap
+        },
+        () => resolve(true)
+      );
+    });
+    return { removedChats };
+  }
+  async function lockPinnedChat(chatKey) {
+    const allPins = await getAllPinnedMessages();
+    const pins = allPins[chatKey] || [];
+    if (!pins.length) return false;
+    const nextPins = pins.map((pin) => ({
+      ...pin,
+      isLocked: true
+    }));
+    await savePinnedMessagesByChat(chatKey, nextPins);
+    return true;
+  }
+  async function unlockPinnedChat(chatKey) {
+    const allPins = await getAllPinnedMessages();
+    const pins = allPins[chatKey] || [];
+    if (!pins.length) return false;
+    const nextPins = pins.map((pin) => ({
+      ...pin,
+      isLocked: false
+    }));
+    await savePinnedMessagesByChat(chatKey, nextPins);
+    return true;
+  }
+  async function isPinnedChatLocked(chatKey) {
+    const pins = await getPinnedMessagesByChat(chatKey);
+    return pins.some((pin) => pin.isLocked === true);
+  }
+  var STORAGE_KEY, CHAT_LAST_SEEN_KEY, PIN_RETENTION_DAYS;
+  var init_pin_storage = __esm({
+    "content/pins/pin-storage.js"() {
+      STORAGE_KEY = "pinned_messages";
+      CHAT_LAST_SEEN_KEY = "pinned_messages_chat_last_seen";
+      PIN_RETENTION_DAYS = 30;
+    }
+  });
+
+  // content/pins/pin-scroll.js
+  function scrollToPinnedMessage(messageId) {
+    const el = document.getElementById(messageId);
+    if (!el) return false;
+    el.scrollIntoView({
+      behavior: "smooth",
+      block: "center"
+    });
+    el.classList.add("ext-pinned-highlight");
+    setTimeout(() => {
+      el.classList.remove("ext-pinned-highlight");
+    }, 1800);
+    return true;
+  }
+  var init_pin_scroll = __esm({
+    "content/pins/pin-scroll.js"() {
+    }
+  });
+
+  // content/pins/pin-modal.js
+  function escapeHtml(value) {
+    return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+  }
+  function renderModal(pins) {
+    const isLocked = pins.some((pin) => pin.isLocked === true);
+    return `
+    <div class="ext-pins-modal" data-ext-pins-modal="true">
+      <div class="ext-pins-modal__backdrop" data-action="closeModal"></div>
+      <div class="ext-pins-modal__dialog">
+        <div class="ext-pins-modal__header">
+          <div class="ext-pins-modal__title">
+            \u0412\u0441\u0435 \u0437\u0430\u043A\u0440\u0435\u043F\u043B\u0435\u043D\u043D\u044B\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F
+            ${isLocked ? '<span class="ext-pins-modal__lock-badge">\u{1F512} \u0430\u0432\u0442\u043E\u043E\u0447\u0438\u0441\u0442\u043A\u0430 \u0432\u044B\u043A\u043B\u044E\u0447\u0435\u043D\u0430</span>' : ""}
+          </div>
+
+          <div class="ext-pins-modal__header-actions">
+            <button
+              class="ext-pins-modal__lock"
+              data-action="toggleLock"
+              title="${isLocked ? "\u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u044C \u0430\u0432\u0442\u043E\u043E\u0447\u0438\u0441\u0442\u043A\u0443" : "\u041D\u0438\u043A\u043E\u0433\u0434\u0430 \u043D\u0435 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0437\u0430\u043A\u0440\u0435\u043F\u044B \u044D\u0442\u043E\u0433\u043E \u0447\u0430\u0442\u0430"}"
+            >
+              ${isLocked ? "\u{1F512}" : "\u{1F513}"}
+            </button>
+
+            <button class="ext-pins-modal__close" data-action="closeModal">\xD7</button>
+          </div>
+        </div>
+
+        <div class="ext-pins-modal__list">
+          ${pins.slice().reverse().map(
+      (pin) => `
+                <div class="ext-pins-modal__item" data-message-id="${pin.messageId}">
+                  <div class="ext-pins-modal__text" data-action="scrollToItem">
+                    ${escapeHtml(pin.text || "\u0411\u0435\u0437 \u0442\u0435\u043A\u0441\u0442\u0430")}
+                  </div>
+                  <button
+                    class="ext-pins-modal__remove"
+                    data-action="removeItem"
+                    data-message-id="${pin.messageId}"
+                    title="\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u0437\u0430\u043A\u0440\u0435\u043F"
+                  >
+                    \xD7
+                  </button>
+                </div>
+              `
+    ).join("")}
+        </div>
+      </div>
+    </div>
+  `;
+  }
+  function openPinsModal(state, app, pins, chatKey) {
+    closePinsModal(state);
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = renderModal(pins);
+    document.body.appendChild(wrapper.firstElementChild);
+    state.pinsModalOpen = true;
+    const modal = document.querySelector(MODAL_SELECTOR);
+    if (!modal) return;
+    modal.querySelectorAll("[data-action]").forEach((el) => {
+      el.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const action = el.getAttribute("data-action");
+        if (action === "closeModal") {
+          closePinsModal(state);
+          return;
+        }
+        if (action === "scrollToItem") {
+          const item = el.closest("[data-message-id]");
+          const messageId = item?.getAttribute("data-message-id");
+          if (messageId) {
+            scrollToPinnedMessage(messageId);
+            closePinsModal(state);
+          }
+          return;
+        }
+        if (action === "removeItem") {
+          const messageId = el.getAttribute("data-message-id");
+          if (messageId) {
+            await app.removePinnedMessage(chatKey, messageId);
+            await app.removePinnedMessage(chatKey, messageId);
+            closePinsModal(state);
+            await app.updatePinsBar();
+          }
+        }
+        if (action === "toggleLock") {
+          const isLocked = pins.some((pin) => pin.isLocked === true);
+          if (isLocked) {
+            await app.unlockPinnedChat(chatKey);
+          } else {
+            await app.lockPinnedChat(chatKey);
+          }
+          closePinsModal(state);
+          await app.updatePinsBar();
+          return;
+        }
+      });
+    });
+  }
+  function closePinsModal(state) {
+    const modal = document.querySelector(MODAL_SELECTOR);
+    if (modal) {
+      modal.remove();
+    }
+    state.pinsModalOpen = false;
+  }
+  var MODAL_SELECTOR;
+  var init_pin_modal = __esm({
+    "content/pins/pin-modal.js"() {
+      init_pin_scroll();
+      MODAL_SELECTOR = "[data-ext-pins-modal]";
+    }
+  });
+
+  // content/pins/pin-utils.js
+  function getCurrentChatDescriptor() {
+    const titleCandidates = [
+      '.ws-conversation-header--title span[data-p-tooltip="true"]',
+      ".ws-conversation-header--title",
+      ".ws-conversation-header--title-part"
+    ];
+    let titleEl = null;
+    for (const selector of titleCandidates) {
+      const found = document.querySelector(selector);
+      if (found && found.textContent?.trim()) {
+        titleEl = found;
+        break;
+      }
+    }
+    const fullTitle = titleEl?.textContent?.trim() || "";
+    if (!fullTitle) {
+      return null;
+    }
+    const normalizedSource = fullTitle.replace(/\s+/g, " ").trim();
+    const match = normalizedSource.match(/^(\d+)\s+(.+)$/);
+    const chatNumber = match ? match[1] : null;
+    const chatTitle = match ? match[2].trim() : normalizedSource;
+    const normalizedTitle = normalizedSource.toLowerCase();
+    return {
+      fullTitle: normalizedSource,
+      chatNumber,
+      chatTitle,
+      normalizedTitle,
+      chatKey: chatNumber || normalizedTitle
+    };
+  }
+  function getCurrentChatKey() {
+    return getCurrentChatDescriptor()?.chatKey || null;
+  }
+  function getMessageElementFromTarget(target) {
+    const msgRoot = target.closest('div[id^="message_"]');
+    if (!msgRoot) return null;
+    const listItem = msgRoot.closest("li.ws-msg-item");
+    if (!listItem) return null;
+    return {
+      listItem,
+      msgRoot,
+      messageId: msgRoot.id
+    };
+  }
+  function getMessageId(messageRoot) {
+    if (!messageRoot) return null;
+    return messageRoot.id || null;
+  }
+  function getMessageText(messageRoot) {
+    if (!messageRoot) return "";
+    const text = messageRoot.innerText || messageRoot.textContent || "";
+    return text.trim().replace(/\s+/g, " ").slice(0, 500);
+  }
+  function buildPinFromMessage(messageRoot) {
+    const messageId = getMessageId(messageRoot);
+    if (!messageId) return null;
+    const chat = getCurrentChatDescriptor();
+    return {
+      messageId,
+      text: getMessageText(messageRoot),
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      chatMeta: chat ? {
+        chatKey: chat.chatKey,
+        chatNumber: chat.chatNumber,
+        chatTitle: chat.chatTitle,
+        fullTitle: chat.fullTitle
+      } : null
+    };
+  }
+  var init_pin_utils = __esm({
+    "content/pins/pin-utils.js"() {
+    }
+  });
+
+  // content/pins/pin-ui.js
+  function getPinsMountPoint() {
+    return document.querySelector(".ws-conversation--messages-container");
+  }
+  function escapeHtml2(value) {
+    return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+  }
+  function renderPinsBar(latestPin, pins) {
+    const isLocked = pins.some((pin) => pin.isLocked === true);
+    return `
+    <div class="ext-pins-bar" data-ext-pins-bar="true">
+      <div class="ext-pins-bar__main">
+        <div class="ext-pins-bar__content" data-action="scrollToLatest">
+          <div class="ext-pins-bar__label">
+            \u0417\u0430\u043A\u0440\u0435\u043F\u043B\u0435\u043D\u043D\u043E\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435
+            ${isLocked ? '<span class="ext-pins-bar__lock-badge">\u{1F512} \u043D\u0435 \u0443\u0434\u0430\u043B\u044F\u0442\u044C</span>' : ""}
+          </div>
+          <div class="ext-pins-bar__text">${escapeHtml2(latestPin.text || "\u0411\u0435\u0437 \u0442\u0435\u043A\u0441\u0442\u0430")}</div>
+        </div>
+
+        <div class="ext-pins-bar__actions">
+          <button
+            class="ext-pins-bar__icon-btn"
+            data-action="toggleLock"
+            title="${isLocked ? "\u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u044C \u0430\u0432\u0442\u043E\u043E\u0447\u0438\u0441\u0442\u043A\u0443" : "\u041D\u0438\u043A\u043E\u0433\u0434\u0430 \u043D\u0435 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0437\u0430\u043A\u0440\u0435\u043F\u044B \u044D\u0442\u043E\u0433\u043E \u0447\u0430\u0442\u0430"}"
+          >
+            ${isLocked ? "\u{1F512}" : "\u{1F513}"}
+          </button>
+
+          <button class="ext-pins-bar__btn" data-action="openAll">
+            \u0412\u0441\u0435 (${pins.length})
+          </button>
+
+          <button
+            class="ext-pins-bar__icon-btn"
+            data-action="removeLatest"
+            title="\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u0437\u0430\u043A\u0440\u0435\u043F"
+          >
+            \xD7
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  }
+  async function tryRenderPinsBar(state, app, retryCount = 0) {
+    const chatKey = getCurrentChatKey();
+    if (!chatKey) {
+      removePinsBar();
+      return;
+    }
+    const pins = await getPinnedMessagesByChat(chatKey);
+    if (!pins.length) {
+      removePinsBar();
+      return;
+    }
+    const latestPin = pins[pins.length - 1];
+    const mountPoint = getPinsMountPoint();
+    if (!mountPoint) {
+      if (retryCount < 20) {
+        setTimeout(() => {
+          tryRenderPinsBar(state, app, retryCount + 1);
+        }, 250);
+      }
+      return;
+    }
+    const computedPosition = window.getComputedStyle(mountPoint).position;
+    if (computedPosition === "static") {
+      mountPoint.style.position = "relative";
+    }
+    const existing = document.querySelector(PINS_BAR_SELECTOR);
+    if (existing) {
+      existing.outerHTML = renderPinsBar(latestPin, pins);
+    } else {
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = renderPinsBar(latestPin, pins);
+      mountPoint.prepend(wrapper.firstElementChild);
+    }
+    mountPoint.classList.add("ext-pins-mounted");
+    bindPinsBarEvents(state, app, chatKey, pins);
+  }
+  async function updatePinsBar(state, app) {
+    return tryRenderPinsBar(state, app, 0);
+  }
+  function removePinsBar() {
+    const existing = document.querySelector(PINS_BAR_SELECTOR);
+    if (existing) {
+      existing.remove();
+    }
+    const mountPoint = getPinsMountPoint();
+    if (mountPoint) {
+      mountPoint.classList.remove("ext-pins-mounted");
+    }
+  }
+  function bindPinsBarEvents(state, app, chatKey, pins) {
+    const bar = document.querySelector(PINS_BAR_SELECTOR);
+    if (!bar) return;
+    bar.querySelectorAll("[data-action]").forEach((el) => {
+      el.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const action = el.getAttribute("data-action");
+        if (action === "scrollToLatest") {
+          const latest = pins[pins.length - 1];
+          scrollToPinnedMessage(latest.messageId);
+          return;
+        }
+        if (action === "openAll") {
+          openPinsModal(state, app, pins, chatKey);
+          return;
+        }
+        if (action === "toggleLock") {
+          const isLocked = pins.some((pin) => pin.isLocked === true);
+          if (isLocked) {
+            await app.unlockPinnedChat(chatKey);
+          } else {
+            await app.lockPinnedChat(chatKey);
+          }
+          await app.updatePinsBar();
+          return;
+        }
+        if (action === "removeLatest") {
+          const latest = pins[pins.length - 1];
+          await app.removePinnedMessage(chatKey, latest.messageId);
+          await app.updatePinsBar();
+        }
+      });
+    });
+  }
+  var PINS_BAR_SELECTOR;
+  var init_pin_ui = __esm({
+    "content/pins/pin-ui.js"() {
+      init_pin_storage();
+      init_pin_scroll();
+      init_pin_modal();
+      init_pin_utils();
+      PINS_BAR_SELECTOR = "[data-ext-pins-bar]";
+    }
+  });
+
+  // content/pins/pin-context-menu.js
+  function getMessageContextMenuRoot() {
+    return document.querySelector(".ws-context-menu-msg");
+  }
+  function getMessageContextMenuList(root) {
+    return root?.querySelector("ul") || null;
+  }
+  function createPinMenuItem(isPinned) {
+    return `
+    <li
+      class="p-menuitem"
+      data-ext-pin-menu="true"
+      role="menuitem"
+      aria-label="${isPinned ? "\u041E\u0442\u043A\u0440\u0435\u043F\u0438\u0442\u044C \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435" : "\u0417\u0430\u043A\u0440\u0435\u043F\u0438\u0442\u044C \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435"}"
+      data-p-highlight="false"
+      data-p-focused="false"
+    >
+      <div class="p-menuitem-content">
+        <a class="p-menuitem-link">
+          <span class="p-menuitem-text">
+            ${isPinned ? "\u041E\u0442\u043A\u0440\u0435\u043F\u0438\u0442\u044C \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435" : "\u0417\u0430\u043A\u0440\u0435\u043F\u0438\u0442\u044C \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435"}
+          </span>
+        </a>
+      </div>
+    </li>
+  `;
+  }
+  function setupPinMenuItemHover(item) {
+    if (!item) return;
+    item.addEventListener("mouseenter", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const allMenuItems = document.querySelectorAll(".p-menuitem");
+      allMenuItems.forEach((menuItem) => {
+        menuItem.classList?.remove("p-focus");
+        menuItem.setAttribute?.("data-p-focused", "false");
+      });
+      item.classList?.add("p-focus");
+      item.setAttribute?.("data-p-focused", "true");
+    });
+    item.addEventListener("mouseleave", () => {
+      item.classList?.remove("p-focus");
+      item.setAttribute?.("data-p-focused", "false");
+    });
+  }
+  function closeSiteContextMenu2() {
+    document.dispatchEvent(
+      new MouseEvent("click", {
+        view: window,
+        bubbles: true,
+        cancelable: true
+      })
+    );
+  }
+  async function tryInjectPinMenu(messageInfo, app, attempt = 0) {
+    const root = getMessageContextMenuRoot();
+    const list = getMessageContextMenuList(root);
+    if (!root || !list) {
+      if (attempt < 15) {
+        setTimeout(() => {
+          tryInjectPinMenu(messageInfo, app, attempt + 1);
+        }, 60);
+      }
+      return;
+    }
+    const oldItem = list.querySelector('[data-ext-pin-menu="true"]');
+    if (oldItem) {
+      oldItem.remove();
+    }
+    const chatKey = getCurrentChatKey();
+    if (!chatKey) {
+      if (attempt < 15) {
+        setTimeout(() => {
+          tryInjectPinMenu(messageInfo, app, attempt + 1);
+        }, 60);
+      }
+      return;
+    }
+    const isPinned = await isPinnedMessage(
+      chatKey,
+      messageInfo.messageId
+    );
+    list.insertAdjacentHTML("beforeend", createPinMenuItem(isPinned));
+    const item = list.querySelector('[data-ext-pin-menu="true"]');
+    if (!item) return;
+    setupPinMenuItemHover(item);
+    item.addEventListener(
+      "click",
+      async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const pin = buildPinFromMessage(messageInfo.msgRoot);
+        if (!pin) return;
+        if (isPinned) {
+          await app.removePinnedMessage(chatKey, messageInfo.messageId);
+        } else {
+          await app.addPinnedMessage(chatKey, pin);
+        }
+        await app.updatePinsBar();
+        closeSiteContextMenu2();
+      },
+      { once: true }
+    );
+  }
+  function setupPinContextMenu(state, app) {
+    if (state.pinContextHandler) {
+      document.removeEventListener("contextmenu", state.pinContextHandler, true);
+    }
+    state.pinContextHandler = (e) => {
+      const messageInfo = getMessageElementFromTarget(e.target);
+      if (!messageInfo) {
+        state.lastRightClickedMessage = null;
+        return;
+      }
+      state.lastRightClickedMessage = messageInfo;
+      setTimeout(() => {
+        tryInjectPinMenu(messageInfo, app, 0);
+      }, 30);
+    };
+    document.addEventListener("contextmenu", state.pinContextHandler, true);
+  }
+  function removePinContextMenu(state) {
+    if (state.pinContextHandler) {
+      document.removeEventListener("contextmenu", state.pinContextHandler, true);
+      state.pinContextHandler = null;
+    }
+  }
+  var init_pin_context_menu = __esm({
+    "content/pins/pin-context-menu.js"() {
+      init_pin_storage();
+      init_pin_utils();
+    }
+  });
+
+  // content/observers/pin-chat-observer.js
+  function setupPinChatObserver(state, app) {
+    removePinChatObserver(state);
+    state.lastObservedChatKey = getCurrentChatKey();
+    if (typeof app.updatePinsBar === "function") {
+      setTimeout(() => {
+        app.updatePinsBar();
+      }, 300);
+    }
+    state.pinChatObserverInterval = setInterval(async () => {
+      if (!state.isEnabled) return;
+      const currentChatKey = getCurrentChatKey();
+      if (!currentChatKey) return;
+      if (state.lastObservedChatKey !== currentChatKey) {
+        state.lastObservedChatKey = currentChatKey;
+        if (typeof app.removePinsBar === "function") {
+          app.removePinsBar();
+        }
+        if (typeof app.updatePinsBar === "function") {
+          await app.updatePinsBar();
+        }
+      }
+    }, 500);
+  }
+  function removePinChatObserver(state) {
+    if (state.pinChatObserverInterval) {
+      clearInterval(state.pinChatObserverInterval);
+      state.pinChatObserverInterval = null;
+    }
+  }
+  var init_pin_chat_observer = __esm({
+    "content/observers/pin-chat-observer.js"() {
+      init_pin_utils();
+    }
+  });
+
+  // content/pins/pin-cleanup.js
+  function parseChatDescriptorFromTitle(fullTitle) {
+    const value = String(fullTitle || "").trim();
+    if (!value) return null;
+    const match = value.match(/^(\d+)\s+(.+)$/);
+    const chatNumber = match ? match[1] : null;
+    const chatTitle = match ? match[2].trim() : value;
+    const normalizedTitle = value.toLowerCase().replace(/\s+/g, " ").trim();
+    return {
+      fullTitle: value,
+      chatNumber,
+      chatTitle,
+      normalizedTitle,
+      chatKey: chatNumber || normalizedTitle
+    };
+  }
+  function getSidebarChats() {
+    const nodes = document.querySelectorAll(SIDEBAR_CHAT_SELECTOR);
+    const chats = [];
+    nodes.forEach((node) => {
+      const descriptor = parseChatDescriptorFromTitle(node.textContent);
+      if (descriptor) {
+        chats.push(descriptor);
+      }
+    });
+    return chats;
+  }
+  async function markVisibleChatsAsSeen() {
+    const chats = getSidebarChats();
+    if (!chats.length) return false;
+    await markChatsAsSeen(chats);
+    return true;
+  }
+  async function cleanupOldPinnedChats2() {
+    return cleanupOldPinnedChats();
+  }
+  var SIDEBAR_CHAT_SELECTOR;
+  var init_pin_cleanup = __esm({
+    "content/pins/pin-cleanup.js"() {
+      init_pin_storage();
+      SIDEBAR_CHAT_SELECTOR = ".ws-conversations-list-item--info--name";
+    }
+  });
+
   // content/app.js
   var ChatsApp;
   var init_app = __esm({
@@ -1371,6 +2112,12 @@
       init_runtime_listeners();
       init_spa_watchdog();
       init_cleanup();
+      init_pin_storage();
+      init_pin_ui();
+      init_pin_context_menu();
+      init_pin_utils();
+      init_pin_chat_observer();
+      init_pin_cleanup();
       ChatsApp = class {
         constructor() {
           this.state = createState();
@@ -1415,6 +2162,9 @@
               this.waitForDOMAndUpdateBadges();
               this.setupSPAObserver();
               this.setupSPAWatchdog();
+              this.setupPinContextMenu();
+              this.updatePinsBar();
+              this.setupPinChatObserver();
             }, 150);
           } else {
             this.cleanup();
@@ -1431,6 +2181,9 @@
           this.removeSPAWatchdog();
           this.state.foldersInjected = false;
           this.resetOrphanTracking();
+          this.removePinContextMenu();
+          this.removePinsBar();
+          this.removePinChatObserver();
           if (this.state.updateBadgesTimeout) {
             clearTimeout(this.state.updateBadgesTimeout);
             this.state.updateBadgesTimeout = null;
@@ -1562,11 +2315,17 @@
           this.removeFolders();
           this.state.foldersInjected = false;
           this.injectFolders();
+          this.removePinContextMenu();
+          this.removePinsBar();
+          this.removePinChatObserver();
           setTimeout(() => {
             this.applySavedFolderQuick();
             this.setupChatListObserver();
             this.setupRightClickHandler();
             this.waitForDOMAndUpdateBadges();
+            this.setupPinContextMenu();
+            this.updatePinsBar();
+            this.setupPinChatObserver();
           }, 150);
         }
         cleanupOrphanedChatsSoft() {
@@ -1574,6 +2333,56 @@
         }
         resetOrphanTracking() {
           return resetOrphanTracking(this.state);
+        }
+        getCurrentChatKey() {
+          return getCurrentChatKey();
+        }
+        async addPinnedMessage(chatKey, pin) {
+          const result = await addPinnedMessage(chatKey, pin);
+          await this.updatePinsBar();
+          return result;
+        }
+        async removePinnedMessage(chatKey, messageId) {
+          const result = await removePinnedMessage(chatKey, messageId);
+          await this.updatePinsBar();
+          return result;
+        }
+        async updatePinsBar() {
+          return updatePinsBar(this.state, this);
+        }
+        removePinsBar() {
+          return removePinsBar();
+        }
+        setupPinContextMenu() {
+          setupPinContextMenu(this.state, this);
+        }
+        removePinContextMenu() {
+          removePinContextMenu(this.state);
+        }
+        setupPinChatObserver() {
+          setupPinChatObserver(this.state, this);
+        }
+        removePinChatObserver() {
+          removePinChatObserver(this.state);
+        }
+        async markVisiblePinnedChatsAsSeen() {
+          return markVisibleChatsAsSeen();
+        }
+        async cleanupOldPinnedChats() {
+          return cleanupOldPinnedChats2();
+        }
+        async lockPinnedChat(chatKey) {
+          const result = await lockPinnedChat(chatKey);
+          await this.updatePinsBar();
+          return result;
+        }
+        async unlockPinnedChat(chatKey) {
+          const result = await unlockPinnedChat(chatKey);
+          await this.updatePinsBar();
+          return result;
+        }
+        async isPinnedChatLocked(chatKey) {
+          return isPinnedChatLocked(chatKey);
         }
       };
     }
