@@ -11,6 +11,12 @@ import * as badges from "./chats/badges.js";
 import * as runtimeListeners from "./runtime-listeners.js";
 import * as spaWatchdog from "./observers/spa-watchdog.js";
 import * as cleanup from "./chats/cleanup.js";
+import * as pinStorage from "./pins/pin-storage.js";
+import * as pinUI from "./pins/pin-ui.js";
+import * as pinContextMenu from "./pins/pin-context-menu.js";
+import * as pinUtils from "./pins/pin-utils.js";
+import * as pinChatObserver from "./observers/pin-chat-observer.js";
+import * as pinCleanup from "./pins/pin-cleanup.js";
 
 export class ChatsApp {
   constructor() {
@@ -67,6 +73,10 @@ export class ChatsApp {
         this.waitForDOMAndUpdateBadges();
         this.setupSPAObserver();
         this.setupSPAWatchdog();
+
+        this.setupPinContextMenu();
+        this.updatePinsBar();
+        this.setupPinChatObserver();
       }, 150);
     } else {
       this.cleanup();
@@ -86,6 +96,11 @@ export class ChatsApp {
     this.state.foldersInjected = false;
 
     this.resetOrphanTracking();
+
+    this.removePinContextMenu();
+    this.removePinsBar();
+
+    this.removePinChatObserver();
 
     if (this.state.updateBadgesTimeout) {
       clearTimeout(this.state.updateBadgesTimeout);
@@ -260,11 +275,19 @@ export class ChatsApp {
 
     this.injectFolders();
 
+    this.removePinContextMenu();
+    this.removePinsBar();
+    this.removePinChatObserver();
+
     setTimeout(() => {
       this.applySavedFolderQuick();
       this.setupChatListObserver();
       this.setupRightClickHandler();
       this.waitForDOMAndUpdateBadges();
+
+      this.setupPinContextMenu();
+      this.updatePinsBar();
+      this.setupPinChatObserver();
     }, 150);
   }
 
@@ -274,5 +297,69 @@ export class ChatsApp {
 
   resetOrphanTracking() {
     return cleanup.resetOrphanTracking(this.state);
+  }
+
+  getCurrentChatKey() {
+    return pinUtils.getCurrentChatKey();
+  }
+
+  async addPinnedMessage(chatKey, pin) {
+    const result = await pinStorage.addPinnedMessage(chatKey, pin);
+    await this.updatePinsBar();
+    return result;
+  }
+
+  async removePinnedMessage(chatKey, messageId) {
+    const result = await pinStorage.removePinnedMessage(chatKey, messageId);
+    await this.updatePinsBar();
+    return result;
+  }
+
+  async updatePinsBar() {
+    return pinUI.updatePinsBar(this.state, this);
+  }
+
+  removePinsBar() {
+    return pinUI.removePinsBar();
+  }
+
+  setupPinContextMenu() {
+    pinContextMenu.setupPinContextMenu(this.state, this);
+  }
+
+  removePinContextMenu() {
+    pinContextMenu.removePinContextMenu(this.state);
+  }
+
+  setupPinChatObserver() {
+    pinChatObserver.setupPinChatObserver(this.state, this);
+  }
+
+  removePinChatObserver() {
+    pinChatObserver.removePinChatObserver(this.state);
+  }
+
+  async markVisiblePinnedChatsAsSeen() {
+    return pinCleanup.markVisibleChatsAsSeen();
+  }
+
+  async cleanupOldPinnedChats() {
+    return pinCleanup.cleanupOldPinnedChats();
+  }
+
+  async lockPinnedChat(chatKey) {
+    const result = await pinStorage.lockPinnedChat(chatKey);
+    await this.updatePinsBar();
+    return result;
+  }
+
+  async unlockPinnedChat(chatKey) {
+    const result = await pinStorage.unlockPinnedChat(chatKey);
+    await this.updatePinsBar();
+    return result;
+  }
+
+  async isPinnedChatLocked(chatKey) {
+    return pinStorage.isPinnedChatLocked(chatKey);
   }
 }

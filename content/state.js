@@ -25,5 +25,12 @@ export function createState() {
     noChatsMessage: null,
 
     orphanMissCounts: new Map(),
+
+    pinContextHandler: null,
+    lastRightClickedMessage: null,
+
+    pinChatObserverInterval: null,
+    lastObservedChatKey: null,
+    pinsModalOpen: false,
   };
 }

@@ -21,6 +21,37 @@
       </button>
     </div>
     <div class="popup_folders"></div>
+    <div id="popupToast" class="popup_toast"></div>
+
+    <div id="popupModal" class="popup_modal" hidden>
+      <div class="popup_modal__backdrop"></div>
+      <div class="popup_modal__dialog">
+        <h4 id="popupModalTitle" class="popup_modal__title"></h4>
+        <p id="popupModalText" class="popup_modal__text"></p>
+
+        <input
+          id="popupModalInput"
+          class="popup_modal__input"
+          type="text"
+          maxlength="30"
+        />
+
+        <div class="popup_modal__actions">
+          <button
+            id="popupModalCancel"
+            class="popup_modal__btn popup_modal__btn--secondary"
+          >
+            Отмена
+          </button>
+          <button
+            id="popupModalConfirm"
+            class="popup_modal__btn popup_modal__btn--primary"
+          >
+            Подтвердить
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- <script src="popup.js"></script> -->
   </body>
