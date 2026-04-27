@@ -12,16 +12,16 @@ function getMessageContextMenuList(root) {
 function createPinMenuItem(isPinned) {
   return `
     <li
-      class="p-menuitem"
+      class="p-contextmenu-item"
       data-ext-pin-menu="true"
       role="menuitem"
       aria-label="${isPinned ? "Открепить сообщение" : "Закрепить сообщение"}"
       data-p-highlight="false"
       data-p-focused="false"
     >
-      <div class="p-menuitem-content">
-        <a class="p-menuitem-link">
-          <span class="p-menuitem-text">
+      <div class="p-contextmenu-item-content">
+        <a class="p-contextmenu-item-link">
+          <span class="p-contextmenu-item-label">
             ${isPinned ? "Открепить сообщение" : "Закрепить сообщение"}
           </span>
         </a>
@@ -37,7 +37,7 @@ function setupPinMenuItemHover(item) {
     e.preventDefault();
     e.stopPropagation();
 
-    const allMenuItems = document.querySelectorAll(".p-menuitem");
+    const allMenuItems = document.querySelectorAll(".p-contextmenu-item");
     allMenuItems.forEach((menuItem) => {
       menuItem.classList?.remove("p-focus");
       menuItem.setAttribute?.("data-p-focused", "false");

@@ -33,7 +33,9 @@ export function removeExtContextMenu(state) {
     }
 
     if (state.handleExtMenuItemClick && state.preparedMenu) {
-      const menuItems = state.preparedMenu.querySelectorAll(".context_menu__item");
+      const menuItems = state.preparedMenu.querySelectorAll(
+        ".context_menu__item",
+      );
       menuItems.forEach((item) => {
         item.removeEventListener("click", state.handleExtMenuItemClick);
       });
@@ -97,7 +99,9 @@ export function injectContextMenuItem(state, app) {
     }
 
     if (typeof window.contextMenuComponent !== "function") {
-      console.error("[context-menu] window.contextMenuComponent is not available");
+      console.error(
+        "[context-menu] window.contextMenuComponent is not available",
+      );
       return;
     }
 
@@ -118,12 +122,18 @@ export function addMenuItemListener(state, app) {
     e.preventDefault();
     e.stopPropagation();
 
-    const allMenuItems = document.querySelectorAll(".p-menuitem");
+    const allMenuItems = document.querySelectorAll(".p-contextmenu-item");
     allMenuItems.forEach((item) => {
-      item.classList?.remove("p-focus");
+      item.classList?.remove("p-contextmenu-item-active");
+      item.setAttribute("data-p-active", "false");
+      item.setAttribute("data-p-focused", "false");
     });
 
-    menuItem.classList?.add("p-focus");
+    menuItem.classList?.add("p-contextmenu-item-active");
+    menuItem.setAttribute("data-p-active", "true");
+    menuItem.setAttribute("data-p-focused", "true");
+    hideOtherSubmenus(state);
+
     injectExtContextMenu(state, app);
   });
 
@@ -141,12 +151,17 @@ export function addMenuItemListener(state, app) {
         contextMenu &&
         !contextMenu.matches(":hover")
       ) {
+        restoreOtherSubmenus(state);
         removeExtContextMenu(state);
-        currentMenuItem.classList?.remove("p-focus");
+        currentMenuItem.classList?.remove("p-contextmenu-item-active");
+        currentMenuItem.setAttribute("data-p-active", "false");
+        currentMenuItem.setAttribute("data-p-focused", "false");
       }
     }, 150);
   });
 }
+
+//
 
 export function prepareExtContextMenu(state, app) {
   const existingMenu = getExtContextMenu();
@@ -162,7 +177,9 @@ export function prepareExtContextMenu(state, app) {
     .filter((folder) => !folder.hidden);
 
   if (typeof window.extContextMenuComponent !== "function") {
-    console.error("[context-menu] window.extContextMenuComponent is not available");
+    console.error(
+      "[context-menu] window.extContextMenuComponent is not available",
+    );
     return;
   }
 
@@ -279,7 +296,11 @@ export function handleMenuItemClick(state, app, e) {
   closeAllMenus(state);
 }
 
-export function setupExtContextMenuListeners(state, app, menu = state.preparedMenu) {
+export function setupExtContextMenuListeners(
+  state,
+  app,
+  menu = state.preparedMenu,
+) {
   if (!menu) return;
 
   menu.addEventListener("mouseenter", () => {});
@@ -295,8 +316,11 @@ export function setupExtContextMenuListeners(state, app, menu = state.preparedMe
         contextMenu &&
         !contextMenu.matches(":hover")
       ) {
+        restoreOtherSubmenus(state);
         removeExtContextMenu(state);
-        menuItem.classList?.remove("p-focus");
+        menuItem.classList?.remove("p-contextmenu-item-active");
+        currentMenuItem.setAttribute("data-p-active", "false");
+        currentMenuItem.setAttribute("data-p-focused", "false");
       }
     }, 150);
   });
@@ -367,4 +391,33 @@ export function removeRightClickHandler(state) {
     document.removeEventListener("click", state.outsideClickHandler, true);
     state.outsideClickHandler = null;
   }
+}
+
+function hideOtherSubmenus(state) {
+  const submenus = document.querySelectorAll('[data-pc-section="submenu"]');
+
+  state.hiddenSubmenus = [];
+
+  submenus.forEach((submenu) => {
+    // не трогаем своё меню
+    if (submenu.closest(SELECTORS.extMenuItem)) return;
+
+    // сохраняем предыдущее состояние
+    state.hiddenSubmenus.push({
+      element: submenu,
+      display: submenu.style.display,
+    });
+
+    submenu.style.display = "none";
+  });
+}
+
+function restoreOtherSubmenus(state) {
+  if (!state.hiddenSubmenus) return;
+
+  state.hiddenSubmenus.forEach(({ element, display }) => {
+    element.style.display = display || "";
+  });
+
+  state.hiddenSubmenus = [];
 }

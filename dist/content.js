@@ -757,7 +757,9 @@
         state.outsideClickHandler = null;
       }
       if (state.handleExtMenuItemClick && state.preparedMenu) {
-        const menuItems = state.preparedMenu.querySelectorAll(".context_menu__item");
+        const menuItems = state.preparedMenu.querySelectorAll(
+          ".context_menu__item"
+        );
         menuItems.forEach((item) => {
           item.removeEventListener("click", state.handleExtMenuItemClick);
         });
@@ -805,7 +807,9 @@
         oldMenuItem.remove();
       }
       if (typeof window.contextMenuComponent !== "function") {
-        console.error("[context-menu] window.contextMenuComponent is not available");
+        console.error(
+          "[context-menu] window.contextMenuComponent is not available"
+        );
         return;
       }
       const menuItemHTML = window.contextMenuComponent();
@@ -820,22 +824,30 @@
     menuItem.addEventListener("mouseenter", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const allMenuItems = document.querySelectorAll(".p-menuitem");
+      const allMenuItems = document.querySelectorAll(".p-contextmenu-item");
       allMenuItems.forEach((item) => {
-        item.classList?.remove("p-focus");
+        item.classList?.remove("p-contextmenu-item-active");
+        item.setAttribute("data-p-active", "false");
+        item.setAttribute("data-p-focused", "false");
       });
-      menuItem.classList?.add("p-focus");
+      menuItem.classList?.add("p-contextmenu-item-active");
+      menuItem.setAttribute("data-p-active", "true");
+      menuItem.setAttribute("data-p-focused", "true");
+      hideOtherSubmenus(state);
       injectExtContextMenu(state, app);
     });
     menuItem.addEventListener("mouseleave", (e) => {
       e.preventDefault();
       e.stopPropagation();
       setTimeout(() => {
-        const currentMenuItem = getExtMenuItem();
+        const currentMenuItem2 = getExtMenuItem();
         const contextMenu = getExtContextMenu();
-        if (currentMenuItem && !currentMenuItem.matches(":hover") && contextMenu && !contextMenu.matches(":hover")) {
+        if (currentMenuItem2 && !currentMenuItem2.matches(":hover") && contextMenu && !contextMenu.matches(":hover")) {
+          restoreOtherSubmenus(state);
           removeExtContextMenu(state);
-          currentMenuItem.classList?.remove("p-focus");
+          currentMenuItem2.classList?.remove("p-contextmenu-item-active");
+          currentMenuItem2.setAttribute("data-p-active", "false");
+          currentMenuItem2.setAttribute("data-p-focused", "false");
         }
       }, 150);
     });
@@ -848,7 +860,9 @@
     const chatInfo = typeof app.getSelectedChat === "function" ? app.getSelectedChat() : null;
     const visibleFolders = state.foldersData.slice(1).filter((folder) => !folder.hidden);
     if (typeof window.extContextMenuComponent !== "function") {
-      console.error("[context-menu] window.extContextMenuComponent is not available");
+      console.error(
+        "[context-menu] window.extContextMenuComponent is not available"
+      );
       return;
     }
     const menuHTML = window.extContextMenuComponent(
@@ -942,8 +956,11 @@
         const menuItem = getExtMenuItem();
         const contextMenu = getExtContextMenu();
         if (menuItem && !menuItem.matches(":hover") && contextMenu && !contextMenu.matches(":hover")) {
+          restoreOtherSubmenus(state);
           removeExtContextMenu(state);
-          menuItem.classList?.remove("p-focus");
+          menuItem.classList?.remove("p-contextmenu-item-active");
+          currentMenuItem.setAttribute("data-p-active", "false");
+          currentMenuItem.setAttribute("data-p-focused", "false");
         }
       }, 150);
     });
@@ -998,6 +1015,25 @@
       document.removeEventListener("click", state.outsideClickHandler, true);
       state.outsideClickHandler = null;
     }
+  }
+  function hideOtherSubmenus(state) {
+    const submenus = document.querySelectorAll('[data-pc-section="submenu"]');
+    state.hiddenSubmenus = [];
+    submenus.forEach((submenu) => {
+      if (submenu.closest(SELECTORS.extMenuItem)) return;
+      state.hiddenSubmenus.push({
+        element: submenu,
+        display: submenu.style.display
+      });
+      submenu.style.display = "none";
+    });
+  }
+  function restoreOtherSubmenus(state) {
+    if (!state.hiddenSubmenus) return;
+    state.hiddenSubmenus.forEach(({ element, display }) => {
+      element.style.display = display || "";
+    });
+    state.hiddenSubmenus = [];
   }
   var init_context_menu = __esm({
     "content/ui/context-menu.js"() {
@@ -1891,16 +1927,16 @@
   function createPinMenuItem(isPinned) {
     return `
     <li
-      class="p-menuitem"
+      class="p-contextmenu-item"
       data-ext-pin-menu="true"
       role="menuitem"
       aria-label="${isPinned ? "\u041E\u0442\u043A\u0440\u0435\u043F\u0438\u0442\u044C \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435" : "\u0417\u0430\u043A\u0440\u0435\u043F\u0438\u0442\u044C \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435"}"
       data-p-highlight="false"
       data-p-focused="false"
     >
-      <div class="p-menuitem-content">
-        <a class="p-menuitem-link">
-          <span class="p-menuitem-text">
+      <div class="p-contextmenu-item-content">
+        <a class="p-contextmenu-item-link">
+          <span class="p-contextmenu-item-label">
             ${isPinned ? "\u041E\u0442\u043A\u0440\u0435\u043F\u0438\u0442\u044C \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435" : "\u0417\u0430\u043A\u0440\u0435\u043F\u0438\u0442\u044C \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435"}
           </span>
         </a>
@@ -1913,7 +1949,7 @@
     item.addEventListener("mouseenter", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const allMenuItems = document.querySelectorAll(".p-menuitem");
+      const allMenuItems = document.querySelectorAll(".p-contextmenu-item");
       allMenuItems.forEach((menuItem) => {
         menuItem.classList?.remove("p-focus");
         menuItem.setAttribute?.("data-p-focused", "false");

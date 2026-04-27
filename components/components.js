@@ -74,7 +74,7 @@ window.contextMenuComponent = () => {
   return `
     <li
       id="cnv_context_menu_5"
-      class="p-menuitem"
+      class="p-contextmenu-item"
       role="menuitem"
       aria-label="Пометить флажком"
       aria-level="1"
@@ -85,9 +85,9 @@ window.contextMenuComponent = () => {
       data-p-focused="false"
       data-ext-menu="true"
     >
-      <div class="p-menuitem-content" data-pc-section="content">
-        <a class="p-menuitem-link">
-          <div class="ws-icon p-menuitem-icon" ws-size="small">
+      <div class="p-contextmenu-item-content" data-pc-section="content">
+        <a class="p-contextmenu-item-link">
+          <div class="ws-icon p-contextmenu-item-icon" ws-size="small">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <g id="SVGRepo_bgCarrier" stroke-width="0"></g>
               <g
@@ -106,7 +106,7 @@ window.contextMenuComponent = () => {
               </g>
             </svg>
           </div>
-          <span class="p-menuitem-text">Добавить в папку</span>
+          <span class="p-contextmenu-item-label">Добавить в папку</span>
         </a>
       </div>
       <!---->
